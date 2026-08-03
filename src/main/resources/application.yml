@@ -1,6 +1,6 @@
 spring:
   application:
-    name: logistics
+    name: logistics-company-service
   #  profiles:
   #    active: dev
   datasource:
@@ -16,6 +16,24 @@ spring:
         format_sql: true
         use_sql_comments: true
         impl.uuid_binary_compatibility: true
+  # Redis 설정, Redis 사용하지 않을 시 주석처리
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+
+message:
+  exchange: baekma.exchange # Producer만 적용
+  queue:
+    delivery: delivery.queue
+    hub: hub.queue
+    notification: notification.queue
 
 springdoc:
   api-docs:

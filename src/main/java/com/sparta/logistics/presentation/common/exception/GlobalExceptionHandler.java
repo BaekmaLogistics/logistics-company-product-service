@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
         log.error("errorCode : {}, uri : {}, message : {}",
                 e.getResponseCode().getErrorCode(), request.getRequestURI(), e.getMessage());
 
-        return ErrorResponse.toResponseEntity(e.getResponseCode(), null);
+        return ErrorResponse.toResponseEntity(e.getResponseCode());
     }
 
     @ExceptionHandler(Exception.class)
@@ -53,6 +53,6 @@ public class GlobalExceptionHandler {
         log.error("uri : {}, message : {}",
                 request.getRequestURI(), e.getMessage(), e);
 
-        return ErrorResponse.toResponseEntity(ErrorResponseCode.INTERNAL_SERVER_ERROR, null);
+        return ErrorResponse.toResponseEntity(ErrorResponseCode.INTERNAL_SERVER_ERROR);
     }
 }
