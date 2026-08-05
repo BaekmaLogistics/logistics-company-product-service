@@ -5,8 +5,8 @@ import com.sparta.logistics.application.query.dto.company.CompanyListResponseDto
 import com.sparta.logistics.application.query.dto.company.CompanySearchRequestDto;
 import com.sparta.logistics.application.query.usecase.GetCompanyListUseCase;
 import com.sparta.logistics.application.query.usecase.GetCompanyUseCase;
+import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
-import com.sparta.logistics.presentation.common.dto.response.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.util.PageableUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;

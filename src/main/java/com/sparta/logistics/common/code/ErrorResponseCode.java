@@ -1,4 +1,4 @@
-package com.sparta.logistics.presentation.common.dto.response;
+package com.sparta.logistics.common.code;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +10,7 @@ public enum ErrorResponseCode implements ApiResponseCode {
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR,"COMMON_0001", "알 수 없는 오류가 발생했습니다."),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "COMMON_0002","유효하지 않은 요청입니다."),
+    FEIGN_CLIENT_ERROR(HttpStatus.BAD_GATEWAY, "COMMON_0003", "Feign 통신 중 오류가 발생했습니다."),
 
     // Company
     COMPANY_NOT_FOUND(HttpStatus.NOT_FOUND, "COMPANY_0001", "존재하지 않는 업체입니다."),

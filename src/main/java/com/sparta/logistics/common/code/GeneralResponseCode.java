@@ -1,4 +1,4 @@
-package com.sparta.logistics.presentation.common.dto.response;
+package com.sparta.logistics.common.code;
 
 
 import lombok.AllArgsConstructor;
@@ -27,7 +27,6 @@ public enum GeneralResponseCode implements ApiResponseCode {
     PRODUCT_LIST_FOUND(HttpStatus.OK, "상품 목록 조회 성공"),
     PRODUCT_BULK_CREATED(HttpStatus.OK, "상품 대량등록 완료"),
     PRODUCT_FREQUENCY_FOUND(HttpStatus.OK, "허브별 출고 빈도 TOP N 조회 성공");
-
 
     public int getCode() {
         return this.status.value();

@@ -1,8 +1,11 @@
 package com.sparta.logistics.presentation.common.exception;
 
 
+import com.sparta.logistics.common.exception.ApiException;
+import com.sparta.logistics.infrastructure.feign.exception.FeignApiException;
 import com.sparta.logistics.presentation.common.dto.response.ErrorResponse;
-import com.sparta.logistics.presentation.common.dto.response.ErrorResponseCode;
+import com.sparta.logistics.common.code.ErrorResponseCode;
+import feign.RetryableException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -54,5 +57,33 @@ public class GlobalExceptionHandler {
                 request.getRequestURI(), e.getMessage(), e);
 
         return ErrorResponse.toResponseEntity(ErrorResponseCode.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(FeignApiException.class)
+    public ResponseEntity<ErrorResponse> handleFeignException(
+            FeignApiException e,
+            HttpServletRequest request
+    ) {
+        log.error("Feign Error : {}", e.getMessage());
+
+        return ResponseEntity
+                .status(e.getStatus())
+                .body(new ErrorResponse(
+                        e.getErrorCode(),
+                        e.getMessage(),
+                        null
+                ));
+    }
+
+    @ExceptionHandler(RetryableException.class)
+    public ResponseEntity<ErrorResponse> handleRetryableException(
+            RetryableException e,
+            HttpServletRequest request
+    ) {
+        log.error("Feign Timeout : {}", e.getMessage());
+
+        return ErrorResponse.toResponseEntity(
+                ErrorResponseCode.FEIGN_CLIENT_ERROR
+        );
     }
 }
