@@ -7,10 +7,10 @@ import com.sparta.logistics.application.command.dto.company.CompanyUpdateRequest
 import com.sparta.logistics.application.command.usecase.CreateCompanyUseCase;
 import com.sparta.logistics.application.command.usecase.DeleteCompanyUseCase;
 import com.sparta.logistics.application.command.usecase.UpdateCompanyUseCase;
+import com.sparta.logistics.common.code.ErrorResponseCode;
+import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
 import com.sparta.logistics.domain.repository.CompanyRepository;
-import com.sparta.logistics.presentation.common.dto.response.ErrorResponseCode;
-import com.sparta.logistics.presentation.common.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

@@ -6,8 +6,8 @@ import com.sparta.logistics.application.command.dto.company.CompanyUpdateRequest
 import com.sparta.logistics.application.command.usecase.CreateCompanyUseCase;
 import com.sparta.logistics.application.command.usecase.DeleteCompanyUseCase;
 import com.sparta.logistics.application.command.usecase.UpdateCompanyUseCase;
+import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
-import com.sparta.logistics.presentation.common.dto.response.GeneralResponseCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
