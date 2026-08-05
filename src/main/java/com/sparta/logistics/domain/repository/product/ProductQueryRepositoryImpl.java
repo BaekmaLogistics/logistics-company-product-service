@@ -29,11 +29,13 @@ public class ProductQueryRepositoryImpl  implements ProductQueryRepository {
             builder.and(product.name.containsIgnoreCase(condition.name()));
         }
         if (condition.companyName() != null) {
+            // companyName은 Product 테이블에 없는 필드라 Company와 join하여 검색
             builder.and(company.name.containsIgnoreCase(condition.companyName()));
         }
 
         builder.and(product.deletedAt.isNull());
 
+        // Company와 join하여 companyName까지 한 번에 조회 (N+1 방지)
         List<ProductSearchResult> content = queryFactory
                 .select(Projections.constructor(
                         ProductSearchResult.class,
@@ -51,7 +53,8 @@ public class ProductQueryRepositoryImpl  implements ProductQueryRepository {
                 .limit(pageable.getPageSize())
                 .fetch();
 
-
+        // count 쿼리도 동일하게 join 유지 필요
+        // (builder에 companyName 조건이 있는데 join이 빠지면 company를 참조할 대상이 없어 오류 발생)
         Long total = queryFactory
                 .select(product.count())
                 .from(product)

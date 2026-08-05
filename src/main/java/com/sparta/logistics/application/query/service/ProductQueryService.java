@@ -1,6 +1,5 @@
 package com.sparta.logistics.application.query.service;
 
-import com.sparta.logistics.application.query.dto.company.CompanyListResponseDto;
 import com.sparta.logistics.application.query.dto.product.ProductDetailResponseDto;
 import com.sparta.logistics.application.query.dto.product.ProductListResponseDto;
 import com.sparta.logistics.application.query.dto.product.ProductSearchRequestDto;

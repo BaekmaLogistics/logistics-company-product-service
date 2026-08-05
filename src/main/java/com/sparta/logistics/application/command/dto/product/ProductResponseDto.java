@@ -3,7 +3,6 @@ package com.sparta.logistics.application.command.dto.product;
 import com.sparta.logistics.domain.entity.Product;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record ProductResponseDto (
