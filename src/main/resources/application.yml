@@ -16,6 +16,11 @@ spring:
         format_sql: true
         use_sql_comments: true
         impl.uuid_binary_compatibility: true
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+
   # Redis 설정, Redis 사용하지 않을 시 주석처리
   data:
     redis:
@@ -27,6 +32,9 @@ spring:
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+
+server:
+  port: 8085
 
 message:
   exchange: baekma.exchange # Producer만 적용
