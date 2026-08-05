@@ -4,13 +4,13 @@ package com.sparta.logistics.application.command.service;
 import com.sparta.logistics.application.command.dto.company.CompanyCreateRequestDto;
 import com.sparta.logistics.application.command.dto.company.CompanyResponseDto;
 import com.sparta.logistics.application.command.dto.company.CompanyUpdateRequestDto;
-import com.sparta.logistics.application.command.usecase.CreateCompanyUseCase;
-import com.sparta.logistics.application.command.usecase.DeleteCompanyUseCase;
-import com.sparta.logistics.application.command.usecase.UpdateCompanyUseCase;
+import com.sparta.logistics.application.command.usecase.company.CreateCompanyUseCase;
+import com.sparta.logistics.application.command.usecase.company.DeleteCompanyUseCase;
+import com.sparta.logistics.application.command.usecase.company.UpdateCompanyUseCase;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
-import com.sparta.logistics.domain.repository.CompanyRepository;
+import com.sparta.logistics.domain.repository.company.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +27,7 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
     private final CompanyRepository companyRepository;
 
     @Override
-    public CompanyResponseDto createCompany(CompanyCreateRequestDto request) {
+    public CompanyResponseDto create(CompanyCreateRequestDto request) {
         // TODO : hub-service FeignClient로 hubId 존재 검증 추가 예정
 
         // 같은 이름이 있는지 조회 후 있으면 오류 메시지 검출
@@ -48,7 +48,7 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
     }
 
     @Override
-    public CompanyResponseDto updateCompany(UUID id, CompanyUpdateRequestDto request) {
+    public CompanyResponseDto update(UUID id, CompanyUpdateRequestDto request) {
         Company company = companyRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("존재하지 않는 업체 수정 시도: id={}", id);
@@ -70,7 +70,7 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
     }
 
     @Override
-    public void deleteCompany(UUID id) {
+    public void delete(UUID id) {
         Company company = companyRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("존재하지 않는 업체 삭제 시도: id={}", id);

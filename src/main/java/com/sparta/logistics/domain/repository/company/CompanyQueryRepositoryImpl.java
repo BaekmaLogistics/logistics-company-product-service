@@ -1,4 +1,4 @@
-package com.sparta.logistics.domain.repository;
+package com.sparta.logistics.domain.repository.company;
 
 
 import com.querydsl.core.BooleanBuilder;

@@ -1,4 +1,4 @@
-package com.sparta.logistics.domain.repository;
+package com.sparta.logistics.domain.repository.company;
 
 import com.sparta.logistics.application.query.dto.company.CompanySearchRequestDto;
 import com.sparta.logistics.domain.entity.Company;
