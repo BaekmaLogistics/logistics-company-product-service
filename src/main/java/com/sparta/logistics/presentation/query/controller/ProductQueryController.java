@@ -7,7 +7,6 @@ import com.sparta.logistics.application.query.usecase.product.GetProductListUseC
 import com.sparta.logistics.application.query.usecase.product.GetProductUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
-import com.sparta.logistics.presentation.common.util.PageableUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -41,8 +40,7 @@ public class ProductQueryController {
             ProductSearchRequestDto condition,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        Pageable normalized = PageableUtils.normalize(pageable);
-        ProductListResponseDto response = getProductListUseCase.getList(condition, normalized);
+        ProductListResponseDto response = getProductListUseCase.getList(condition, pageable);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.PRODUCT_LIST_FOUND, response);
     }
 }

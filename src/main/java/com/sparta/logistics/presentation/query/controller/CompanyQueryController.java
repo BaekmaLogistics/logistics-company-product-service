@@ -7,7 +7,6 @@ import com.sparta.logistics.application.query.usecase.company.GetCompanyListUseC
 import com.sparta.logistics.application.query.usecase.company.GetCompanyUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
-import com.sparta.logistics.presentation.common.util.PageableUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -41,8 +40,7 @@ public class CompanyQueryController {
             CompanySearchRequestDto condition,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC)Pageable pageable) {
 
-        Pageable normalized = PageableUtils.normalize(pageable);
-        CompanyListResponseDto response = getCompanyListUseCase.getList(condition, normalized);
+        CompanyListResponseDto response = getCompanyListUseCase.getList(condition, pageable);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_LIST_FOUND, response);
     }
 }
