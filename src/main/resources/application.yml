@@ -42,9 +42,14 @@ spring:
             connect-timeout: 5000
             read-timeout: 3000
             logger-level: basic
-
+            error-decoder: com.sparta.logistics.infrastructure.feign.decoder.FeignErrorDecoder
+#포트 번호 설정
 server:
-  port: 8085
+  port: ${SERVER_PORT:8085}
+#
+hub:
+  service:
+    url: ${HUB_SERVICE_URL:http://localhost:8082}
 
 message:
   exchange: baekma.exchange # Producer만 적용
