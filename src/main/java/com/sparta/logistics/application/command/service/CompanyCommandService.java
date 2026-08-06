@@ -72,8 +72,18 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
         // TODO : 권한 확인 ( MASTER / HUB_MANAGER / COMPANY_MANAGER )
         // TODO : 게이트웨이 인증 / 인가 방식 확정 후 헤더에서 role, userId 꺼내서 검증 로직 추가
 
-        company.update(request.name(), request.address());
-        log.info("업체 수정 완료: id={}", id);
+        if(request.hubId() != null) {
+            try{
+                hubClient.getHub(request.hubId());
+            } catch (FeignApiException e) {
+                log.warn("업체 수정 실패 - 존재하지 않는 허브: hubId={}", request.hubId());
+                throw new ApiException(ErrorResponseCode.HUB_NOT_FOUND);
+            }
+        }
+
+        company.update(request.name(), request.address(), request.hubId());
+        log.info("업체 수정 완료: id={}, name = {}, address = {}, hub_id = {}",
+                id, request.name(), request.address(), request.hubId());
 
         return CompanyResponseDto.from(company);
     }

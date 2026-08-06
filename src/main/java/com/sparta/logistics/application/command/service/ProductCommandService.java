@@ -8,9 +8,12 @@ import com.sparta.logistics.application.command.usecase.product.DeleteProductUse
 import com.sparta.logistics.application.command.usecase.product.UpdateProductUseCase;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
+import com.sparta.logistics.domain.entity.Company;
 import com.sparta.logistics.domain.entity.Product;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
 import com.sparta.logistics.domain.repository.product.ProductRepository;
+import com.sparta.logistics.infrastructure.feign.client.HubClient;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,13 +29,23 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
 
     private final ProductRepository productRepository;
     private final CompanyRepository companyRepository;
+    private final HubClient hubClient;
 
     @Override
     public ProductResponseDto create(ProductCreateRequestDto request){
         // 소속 업체가 실제 존재하는지 검증 (없으면 COMPANY_NOT_FOUND)
-        if(!companyRepository.existsByIdAndDeletedAtIsNull(request.companyId())) {
+        Company company = companyRepository.findByIdAndDeletedAtIsNull(request.companyId())
+                .orElseThrow(()->{
             log.warn("업체가 존재하지 않습니다. companyId = {}", request.companyId());
-            throw new ApiException(ErrorResponseCode.COMPANY_NOT_FOUND);
+            return new ApiException(ErrorResponseCode.COMPANY_NOT_FOUND);
+        });
+
+        // 업체의 허브ID로 허브 존재 검증
+        try{
+            hubClient.getHub(company.getHubId());
+        } catch (FeignException.FeignClientException e) {
+            log.warn("상품 생성 실패 - 존재하지 않는 허브: hubId={}", company.getHubId());
+            throw new ApiException(ErrorResponseCode.HUB_NOT_FOUND);
         }
 
         Product product = Product.create(
