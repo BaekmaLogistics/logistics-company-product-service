@@ -49,10 +49,12 @@ public class Company extends BaseUpdatableEntity {
     }
 
     // 부분 수정 : null이 아닌 필드만 갱신
-    public void update(String name, String address) {
+    public void update(String name, String address, UUID hubId) {
         if(name != null)
             this.name = name;
         if(address != null)
             this.address = address;
+        if(hubId != null)
+            this.hubId = hubId;
     }
 }
