@@ -10,7 +10,9 @@ import com.sparta.logistics.application.command.usecase.company.UpdateCompanyUse
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
+import com.sparta.logistics.domain.entity.Product;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
+import com.sparta.logistics.domain.repository.product.ProductRepository;
 import com.sparta.logistics.infrastructure.feign.client.HubClient;
 import com.sparta.logistics.infrastructure.feign.exception.FeignApiException;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -28,6 +31,7 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
 
     private final CompanyRepository companyRepository;
     private final HubClient hubClient;
+    private final ProductRepository productRepository;
 
     @Override
     public CompanyResponseDto create(CompanyCreateRequestDto request) {
@@ -104,6 +108,11 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
         // TODO : 권한 확인
 
         company.softDelete(null);
+
+        // 소속 상품도 함께 비활성화
+        List<Product> products = productRepository.findAllByCompanyIdAndDeletedAtIsNull(id);
+        products.forEach(product -> product.softDelete(null));
+
         log.info("업체 삭제 완료: id={}", id);
     }
 }
