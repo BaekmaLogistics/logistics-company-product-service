@@ -3,9 +3,9 @@ package com.sparta.logistics.presentation.command.controller;
 import com.sparta.logistics.application.command.dto.company.CompanyCreateRequestDto;
 import com.sparta.logistics.application.command.dto.company.CompanyResponseDto;
 import com.sparta.logistics.application.command.dto.company.CompanyUpdateRequestDto;
-import com.sparta.logistics.application.command.usecase.CreateCompanyUseCase;
-import com.sparta.logistics.application.command.usecase.DeleteCompanyUseCase;
-import com.sparta.logistics.application.command.usecase.UpdateCompanyUseCase;
+import com.sparta.logistics.application.command.usecase.company.CreateCompanyUseCase;
+import com.sparta.logistics.application.command.usecase.company.DeleteCompanyUseCase;
+import com.sparta.logistics.application.command.usecase.company.UpdateCompanyUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
 import jakarta.validation.Valid;
@@ -29,7 +29,7 @@ public class CompanyCommandController {
     @PostMapping
     public ResponseEntity<GeneralResponse<CompanyResponseDto>> createCompany(
             @Valid @RequestBody CompanyCreateRequestDto request) {
-        CompanyResponseDto response = createCompanyUseCase.createCompany(request);
+        CompanyResponseDto response = createCompanyUseCase.create(request);
 
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_CREATED, response);
     }
@@ -38,14 +38,14 @@ public class CompanyCommandController {
     public ResponseEntity<GeneralResponse<CompanyResponseDto>> updateCompany(
             @PathVariable UUID companyId,
             @Valid @RequestBody CompanyUpdateRequestDto request) {
-        CompanyResponseDto response = updateCompanyUseCase.updateCompany(companyId, request);
+        CompanyResponseDto response = updateCompanyUseCase.update(companyId, request);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_UPDATED, response);
     }
 
 
     @DeleteMapping("/{companyId}")
     public ResponseEntity<GeneralResponse<Void>> deleteCompany(@PathVariable UUID companyId) {
-        deleteCompanyUseCase.deleteCompany(companyId);
+        deleteCompanyUseCase.delete(companyId);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_DELETED, null);
     }
 

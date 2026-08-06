@@ -1,4 +1,4 @@
-package com.sparta.logistics.domain.repository;
+package com.sparta.logistics.domain.repository.company;
 
 import com.sparta.logistics.domain.entity.Company;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,4 +10,5 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
 
     Optional<Company> findByIdAndDeletedAtIsNull(UUID id);
     boolean existsByNameAndDeletedAtIsNull(String name);
+    boolean existsByIdAndDeletedAtIsNull(UUID id);
 }

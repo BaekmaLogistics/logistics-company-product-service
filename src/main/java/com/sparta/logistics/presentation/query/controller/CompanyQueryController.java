@@ -3,8 +3,8 @@ package com.sparta.logistics.presentation.query.controller;
 import com.sparta.logistics.application.query.dto.company.CompanyDetailResponseDto;
 import com.sparta.logistics.application.query.dto.company.CompanyListResponseDto;
 import com.sparta.logistics.application.query.dto.company.CompanySearchRequestDto;
-import com.sparta.logistics.application.query.usecase.GetCompanyListUseCase;
-import com.sparta.logistics.application.query.usecase.GetCompanyUseCase;
+import com.sparta.logistics.application.query.usecase.company.GetCompanyListUseCase;
+import com.sparta.logistics.application.query.usecase.company.GetCompanyUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
 import com.sparta.logistics.presentation.common.util.PageableUtils;
@@ -32,7 +32,7 @@ public class CompanyQueryController {
     public ResponseEntity<GeneralResponse<CompanyDetailResponseDto>> getCompany(
             @PathVariable UUID companyId) {
 
-        CompanyDetailResponseDto response = getCompanyUseCase.getCompany(companyId);
+        CompanyDetailResponseDto response = getCompanyUseCase.get(companyId);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_FOUND, response);
     }
 
@@ -42,7 +42,7 @@ public class CompanyQueryController {
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC)Pageable pageable) {
 
         Pageable normalized = PageableUtils.normalize(pageable);
-        CompanyListResponseDto response = getCompanyListUseCase.getCompanyList(condition, normalized);
+        CompanyListResponseDto response = getCompanyListUseCase.getList(condition, normalized);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_LIST_FOUND, response);
     }
 }
