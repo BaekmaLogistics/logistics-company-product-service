@@ -11,6 +11,8 @@ import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
+import com.sparta.logistics.infrastructure.feign.client.HubClient;
+import com.sparta.logistics.infrastructure.feign.exception.FeignApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,10 +27,17 @@ import java.util.UUID;
 public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompanyUseCase, DeleteCompanyUseCase {
 
     private final CompanyRepository companyRepository;
+    private final HubClient hubClient;
 
     @Override
     public CompanyResponseDto create(CompanyCreateRequestDto request) {
-        // TODO : hub-service FeignClient로 hubId 존재 검증 추가 예정
+        // hubId 존재 검증 ( Hub 서비스에 FeignClient로 확인 )
+        try{
+            hubClient.getHub(request.hubId());
+        } catch (FeignApiException e) {
+            log.warn("업체 생성 실패 - 존재하지 않는 허브: hubId={}", request.hubId());
+            throw new ApiException(ErrorResponseCode.HUB_NOT_FOUND);
+        }
 
         // 같은 이름이 있는지 조회 후 있으면 오류 메시지 검출
         if(companyRepository.existsByNameAndDeletedAtIsNull(request.name())) {
