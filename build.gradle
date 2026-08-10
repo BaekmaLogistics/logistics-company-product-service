@@ -44,6 +44,10 @@ dependencies {
 
     //Micrometer Tracing
     implementation 'io.micrometer:micrometer-tracing-bridge-brave'
+    implementation 'io.github.openfeign:feign-micrometer'
+
+    //Resilience4j
+    implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
 
     //Zipkin
     implementation 'io.zipkin.reporter2:zipkin-reporter-brave'

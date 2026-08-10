@@ -27,8 +27,8 @@ public class QueueConfig {
     @Bean public Queue queueHub() { return new Queue(queueHub); }
     @Bean public Queue queueNotification() { return new Queue(queueNotification); }
 
-    @Bean public Binding bindingDelivery() { return BindingBuilder.bind(queueDelivery()).to(exchange()).with(queueDelivery); }
-    @Bean public Binding bindingHub() { return BindingBuilder.bind(queueHub()).to(exchange()).with(queueHub); }
-    @Bean public Binding bindingNotification() { return BindingBuilder.bind(queueNotification()).to(exchange()).with(queueNotification); }
+    @Bean public Binding bindingDelivery() { return BindingBuilder.bind(queueDelivery()).to(exchange()).with("delivery.#"); }
+    @Bean public Binding bindingHub() { return BindingBuilder.bind(queueHub()).to(exchange()).with("hub.#"); }
+    @Bean public Binding bindingNotification() { return BindingBuilder.bind(queueNotification()).to(exchange()).with("notification.#"); }
 
 }

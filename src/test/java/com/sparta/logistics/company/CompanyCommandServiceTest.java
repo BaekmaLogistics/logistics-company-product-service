@@ -4,14 +4,16 @@ import com.sparta.logistics.application.command.dto.company.CompanyCreateRequest
 import com.sparta.logistics.application.command.dto.company.CompanyResponseDto;
 import com.sparta.logistics.application.command.dto.company.CompanyUpdateRequestDto;
 import com.sparta.logistics.application.command.service.CompanyCommandService;
+import com.sparta.logistics.application.common.AuthorizationChecker;
+import com.sparta.logistics.application.common.HubValidator;
+import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
 import com.sparta.logistics.domain.entity.Product;
 import com.sparta.logistics.domain.model.CompanyType;
+import com.sparta.logistics.domain.model.UserRole;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
 import com.sparta.logistics.domain.repository.product.ProductRepository;
-import com.sparta.logistics.infrastructure.feign.client.HubClient;
-import com.sparta.logistics.infrastructure.feign.exception.FeignApiException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,10 +39,15 @@ public class CompanyCommandServiceTest {
     private ProductRepository productRepository;
 
     @Mock
-    private HubClient hubClient;
+    private HubValidator hubValidator;
 
     @InjectMocks
     private CompanyCommandService companyCommandService;
+
+    @Mock
+    private AuthorizationChecker authorizationChecker;
+
+    private final UUID userId = UUID.randomUUID();
 
     @Test
     @DisplayName("업체 생성 성공 - hubId가 유효하고 이름 중복이 없으면 정상 생성")
@@ -52,7 +59,7 @@ public class CompanyCommandServiceTest {
         );
 
         // hubClient.getHub()가 예외없이 통과한다고 가정(정상 허브)
-        when(hubClient.getHub(hubId)).thenReturn(null);
+        //when(hubClient.getHub(hubId)).thenReturn(null);
 
         // 이름 중복 없음
         when(companyRepository.existsByNameAndDeletedAtIsNull(request.name())).thenReturn(false);
@@ -62,7 +69,7 @@ public class CompanyCommandServiceTest {
         when(companyRepository.save(any(Company.class))).thenReturn(savedCompany);
 
         //when
-        CompanyResponseDto response = companyCommandService.create(request);
+        CompanyResponseDto response = companyCommandService.create(request, userId, UserRole.MASTER);
 
         // then : 응답이 요청한 값과 일치하는지 확인
         assertThat(response.name()).isEqualTo("테스트업체");
@@ -78,11 +85,14 @@ public class CompanyCommandServiceTest {
                 "테스트업체", CompanyType.SUPPLIER, invalidHubId, "서울시 어딘가"
         );
 
-        when(hubClient.getHub(invalidHubId)).thenThrow(
-                new FeignApiException("HUB_NOT_FOUND", "존재하지 않는 허브입니다.", 404));
+        //when(hubClient.getHub(invalidHubId)).thenThrow(
+                //new FeignApiException("HUB_NOT_FOUND", "존재하지 않는 허브입니다.", 404));
+
+        doThrow(new ApiException(ErrorResponseCode.HUB_NOT_FOUND))
+                .when(hubValidator).validateHub(invalidHubId);
 
         //when & then  : ApiException이 발생하고, 저장 로직까지 도달하지 않아야 함
-        assertThatThrownBy(()-> companyCommandService.create(request))
+        assertThatThrownBy(()-> companyCommandService.create(request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
 
         verify(companyRepository, never()).save(any(Company.class));
@@ -96,11 +106,11 @@ public class CompanyCommandServiceTest {
         CompanyCreateRequestDto request = new CompanyCreateRequestDto(
                 "중복업체", CompanyType.SUPPLIER, hubId, "서울시 어딘가"
         );
-        when(hubClient.getHub(hubId)).thenReturn(null);
+        //when(hubClient.getHub(hubId)).thenReturn(null);
         when(companyRepository.existsByNameAndDeletedAtIsNull(request.name())).thenReturn(true);
 
         // when & then
-        assertThatThrownBy(()->companyCommandService.create(request))
+        assertThatThrownBy(()->companyCommandService.create(request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
 
         verify(companyRepository, never()).save(any(Company.class));
@@ -117,13 +127,14 @@ public class CompanyCommandServiceTest {
         CompanyUpdateRequestDto request = new CompanyUpdateRequestDto("수정된업체명", "수정된주소", newHubId);
 
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(existingCompany));
-        when(hubClient.getHub(newHubId)).thenReturn(null);
+        //when(hubClient.getHub(newHubId)).thenReturn(null);
 
         // when
-        CompanyResponseDto response = companyCommandService.update(companyId, request);
+        CompanyResponseDto response = companyCommandService.update(companyId, request, userId, UserRole.MASTER);
 
         // then : 실제로 name, address, hubId가 바뀌었는지 확인
         assertThat(response.name()).isEqualTo("수정된업체명");
+        verify(hubValidator, times(1)).validateHub(newHubId);
     }
 
     @Test
@@ -137,11 +148,14 @@ public class CompanyCommandServiceTest {
         CompanyUpdateRequestDto request = new CompanyUpdateRequestDto("수정된업체명", "수정된주소", invalidHubId);
 
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(existingCompany));
-        when(hubClient.getHub(invalidHubId))
-                        .thenThrow(new FeignApiException("HUB_NOT_FOUND", "존재하지 않는 허브입니다.", 404));
+        //when(hubClient.getHub(invalidHubId))
+                        //.thenThrow(new FeignApiException("HUB_NOT_FOUND", "존재하지 않는 허브입니다.", 404));
+
+        doThrow(new ApiException(ErrorResponseCode.HUB_NOT_FOUND))
+                .when(hubValidator).validateHub(invalidHubId);
 
         // when & then
-        assertThatThrownBy(() -> companyCommandService.update(companyId, request))
+        assertThatThrownBy(() -> companyCommandService.update(companyId, request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -150,6 +164,8 @@ public class CompanyCommandServiceTest {
     void update_withoutHubId_skipsValidation() {
         // given : hubId를 안 보내는(null) 부분수정 요청
         UUID companyId = UUID.randomUUID();
+        UUID newHubId = UUID.randomUUID();
+
         Company existingCompany = Company.create("기존업체", CompanyType.SUPPLIER, UUID.randomUUID(), "기존주소");
 
         CompanyUpdateRequestDto request = new CompanyUpdateRequestDto("수정된업체명", null, null);
@@ -157,11 +173,12 @@ public class CompanyCommandServiceTest {
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(existingCompany));
 
         // when
-        CompanyResponseDto response = companyCommandService.update(companyId, request);
+        CompanyResponseDto response = companyCommandService.update(companyId, request, userId, UserRole.MASTER);
 
         // then : hubClient가 아예 호출되지 않아야 함 (검증 스킵 확인)
         assertThat(response.name()).isEqualTo("수정된업체명");
-        verify(hubClient, never()).getHub(any());
+        //verify(hubClient, never()).getHub(any());
+        verify(hubValidator, never()).validateHub(any());
     }
 
     @Test
@@ -174,7 +191,7 @@ public class CompanyCommandServiceTest {
         when(companyRepository.findById(companyId)).thenReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> companyCommandService.update(companyId, request))
+        assertThatThrownBy(() -> companyCommandService.update(companyId, request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -193,7 +210,7 @@ public class CompanyCommandServiceTest {
                 .thenReturn(List.of(product1, product2));
 
         // when
-        companyCommandService.delete(companyId);
+        companyCommandService.delete(companyId, userId, UserRole.MASTER);
 
         // then : 상품 조회가 실제로 호출됐는지 확인 (연쇄 삭제 로직이 실행됐다는 증거)
         verify(productRepository, times(1)).findAllByCompanyIdAndDeletedAtIsNull(companyId);
@@ -212,7 +229,7 @@ public class CompanyCommandServiceTest {
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(alreadyDeletedCompany));
 
         // when
-        companyCommandService.delete(companyId);
+        companyCommandService.delete(companyId, userId, UserRole.MASTER);
 
         // then : 상품 조회 로직 자체가 호출되지 않아야 함 (멱등 처리로 조기 종료)
         verify(productRepository, never()).findAllByCompanyIdAndDeletedAtIsNull(any());
@@ -226,7 +243,7 @@ public class CompanyCommandServiceTest {
         when(companyRepository.findById(companyId)).thenReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> companyCommandService.delete(companyId))
+        assertThatThrownBy(() -> companyCommandService.delete(companyId, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
     }
 }
