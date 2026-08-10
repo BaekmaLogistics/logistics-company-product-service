@@ -4,10 +4,14 @@ import com.sparta.logistics.application.command.dto.product.ProductCreateRequest
 import com.sparta.logistics.application.command.dto.product.ProductResponseDto;
 import com.sparta.logistics.application.command.dto.product.ProductUpdateRequestDto;
 import com.sparta.logistics.application.command.service.ProductCommandService;
+import com.sparta.logistics.application.common.AuthorizationChecker;
+import com.sparta.logistics.application.common.HubValidator;
+import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
 import com.sparta.logistics.domain.entity.Product;
 import com.sparta.logistics.domain.model.CompanyType;
+import com.sparta.logistics.domain.model.UserRole;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
 import com.sparta.logistics.domain.repository.product.ProductRepository;
 import com.sparta.logistics.infrastructure.feign.client.HubClient;
@@ -36,10 +40,15 @@ public class ProductCommandServiceTest {
     private CompanyRepository companyRepository;
 
     @Mock
-    private HubClient hubClient;
+    private HubValidator hubValidator;
+
+    @Mock
+    private AuthorizationChecker authorizationChecker;
 
     @InjectMocks
     private ProductCommandService productCommandService;
+
+    private final UUID userId = UUID.randomUUID();
 
     @Test
     @DisplayName("상품 생성 성공 - 업체와 허브가 모두 유효하면 정상 생성")
@@ -51,15 +60,16 @@ public class ProductCommandServiceTest {
         ProductCreateRequestDto request = new ProductCreateRequestDto("상품", companyId);
 
         when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
-        when(hubClient.getHub(hubId)).thenReturn(null);
 
         Product savedProduct = Product.create(request.name(), request.companyId());
         when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
 
-        ProductResponseDto response = productCommandService.create(request);
+        ProductResponseDto response = productCommandService.create(request, userId, UserRole.MASTER);
 
         assertThat(response.name()).isEqualTo("상품");
         verify(productRepository, times(1)).save(any(Product.class));
+        verify(hubValidator, times(1)).validateHub(hubId);
+
     }
 
     @Test
@@ -70,7 +80,7 @@ public class ProductCommandServiceTest {
 
         when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> productCommandService.create(request))
+        assertThatThrownBy(() -> productCommandService.create(request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
 
         verify(productRepository, never()).save(any(Product.class));
@@ -86,10 +96,11 @@ public class ProductCommandServiceTest {
         ProductCreateRequestDto request = new ProductCreateRequestDto("상품", companyId);
 
         when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
-        when(hubClient.getHub(invalidHubId))
-                .thenThrow(new FeignApiException("HUB_NOT_FOUND", "존재하지 않는 허브입니다.", 404));
+        doThrow(new ApiException(ErrorResponseCode.HUB_NOT_FOUND))
+                .when(hubValidator).validateHub(invalidHubId);
 
-        assertThatThrownBy(() -> productCommandService.create(request))
+
+        assertThatThrownBy(() -> productCommandService.create(request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
 
         verify(productRepository, never()).save(any(Product.class));
@@ -99,13 +110,17 @@ public class ProductCommandServiceTest {
     @DisplayName("상품 수정 성공 - 정상적으로 이름이 변경")
     void update_success() {
         UUID productId = UUID.randomUUID();
-        Product existingProduct = Product.create("기존상품", UUID.randomUUID());
+        UUID companyId = UUID.randomUUID();
+
+        Product existingProduct = Product.create("기존상품", companyId);
+        Company company = Company.create("업체", CompanyType.SUPPLIER, UUID.randomUUID(), "주소");
 
         ProductUpdateRequestDto request = new ProductUpdateRequestDto("수정된상품");
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(existingProduct));
+        when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
 
-        ProductResponseDto response = productCommandService.update(productId, request);
+        ProductResponseDto response = productCommandService.update(productId, request, userId, UserRole.MASTER);
 
         assertThat(response.name()).isEqualTo("수정된상품");
     }
@@ -121,7 +136,7 @@ public class ProductCommandServiceTest {
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(deletedProduct));
 
-        assertThatThrownBy(() -> productCommandService.update(productId, request))
+        assertThatThrownBy(() -> productCommandService.update(productId, request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -133,7 +148,7 @@ public class ProductCommandServiceTest {
 
         when(productRepository.findById(productId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> productCommandService.update(productId, request))
+        assertThatThrownBy(() -> productCommandService.update(productId, request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -141,11 +156,15 @@ public class ProductCommandServiceTest {
     @DisplayName("상품 삭제 성공 - 정상적으로 소프트 삭제")
     void delete_success() {
         UUID productId = UUID.randomUUID();
-        Product existingProduct = Product.create("상품", UUID.randomUUID());
+        UUID companyId = UUID.randomUUID();
+
+        Product existingProduct = Product.create("상품", companyId);
+        Company company = Company.create("업체", CompanyType.SUPPLIER, UUID.randomUUID(), "주소");
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(existingProduct));
+        when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
 
-        productCommandService.delete(productId);
+        productCommandService.delete(productId, userId, UserRole.MASTER);
 
         assertThat(existingProduct.getDeletedAt()).isNotNull();
     }
@@ -160,10 +179,11 @@ public class ProductCommandServiceTest {
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(deletedProduct));
 
-        productCommandService.delete(productId);
+        productCommandService.delete(productId, userId, UserRole.MASTER);
 
         // 타임스탬프가 재갱신되지 않았는지(다시 삭제 처리가 안 일어났는지) 확인
         assertThat(deletedProduct.getDeletedAt()).isEqualTo(beforeDeletedAt);
+        verify(companyRepository, never()).findByIdAndDeletedAtIsNull(any());
     }
 
     @Test
@@ -172,7 +192,7 @@ public class ProductCommandServiceTest {
         UUID productId = UUID.randomUUID();
         when(productRepository.findById(productId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> productCommandService.delete(productId))
+        assertThatThrownBy(() -> productCommandService.delete(productId, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
     }
 

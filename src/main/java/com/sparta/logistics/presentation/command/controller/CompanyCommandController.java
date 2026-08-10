@@ -7,6 +7,9 @@ import com.sparta.logistics.application.command.usecase.company.CreateCompanyUse
 import com.sparta.logistics.application.command.usecase.company.DeleteCompanyUseCase;
 import com.sparta.logistics.application.command.usecase.company.UpdateCompanyUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
+import com.sparta.logistics.domain.model.UserRole;
+import com.sparta.logistics.presentation.common.constant.HeaderConstants;
+import com.sparta.logistics.presentation.common.constant.RoleHeaderParser;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,12 +27,16 @@ public class CompanyCommandController {
     private final UpdateCompanyUseCase updateCompanyUseCase;
     private final DeleteCompanyUseCase deleteCompanyUseCase;
 
-    // TODO : 권한 체크(MASTER, HUB_MANAGER) - 게이트웨이 인증 / 인가 방식 확정 후 추가
-
     @PostMapping
     public ResponseEntity<GeneralResponse<CompanyResponseDto>> createCompany(
-            @Valid @RequestBody CompanyCreateRequestDto request) {
-        CompanyResponseDto response = createCompanyUseCase.create(request);
+            @Valid @RequestBody CompanyCreateRequestDto request,
+            @RequestHeader(HeaderConstants.USER_ID) UUID userId,
+            @RequestHeader(HeaderConstants.USER_ROLE) String rawRole) {
+
+        UserRole role = RoleHeaderParser.parse(rawRole);
+
+    //    CompanyResponseDto response = createCompanyUseCase.create(request);
+        CompanyResponseDto response = createCompanyUseCase.create(request, userId, role);
 
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_CREATED, response);
     }
@@ -37,15 +44,26 @@ public class CompanyCommandController {
     @PatchMapping("/{companyId}")
     public ResponseEntity<GeneralResponse<CompanyResponseDto>> updateCompany(
             @PathVariable UUID companyId,
-            @Valid @RequestBody CompanyUpdateRequestDto request) {
-        CompanyResponseDto response = updateCompanyUseCase.update(companyId, request);
+            @Valid @RequestBody CompanyUpdateRequestDto request,
+            @RequestHeader(HeaderConstants.USER_ID) UUID userId,
+            @RequestHeader(HeaderConstants.USER_ROLE) String rawRole) {
+
+        UserRole role = RoleHeaderParser.parse(rawRole);
+
+        CompanyResponseDto response = updateCompanyUseCase.update(companyId, request, userId, role);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_UPDATED, response);
     }
 
 
     @DeleteMapping("/{companyId}")
-    public ResponseEntity<GeneralResponse<Void>> deleteCompany(@PathVariable UUID companyId) {
-        deleteCompanyUseCase.delete(companyId);
+    public ResponseEntity<GeneralResponse<Void>> deleteCompany(
+            @PathVariable UUID companyId,
+            @RequestHeader(HeaderConstants.USER_ID) UUID userId,
+            @RequestHeader(HeaderConstants.USER_ROLE) String rawRole) {
+
+        UserRole role = RoleHeaderParser.parse(rawRole);
+
+        deleteCompanyUseCase.delete(companyId, userId, role);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.COMPANY_DELETED, null);
     }
 

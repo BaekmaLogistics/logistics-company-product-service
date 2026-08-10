@@ -1,4 +1,4 @@
-package com.sparta.logistics.domain.entity;
+package com.sparta.logistics.domain.model;
 
 public enum UserRole {
     MASTER,

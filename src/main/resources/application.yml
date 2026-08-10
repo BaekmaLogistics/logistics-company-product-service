@@ -52,6 +52,10 @@ hub:
   service:
     url: ${HUB_SERVICE_URL}
 
+user:
+  service:
+    url: ${USER_SERVICE_URL}
+
 message:
   exchange: baekma.exchange # Producer만 적용
   queue:
@@ -83,3 +87,12 @@ logging:
   level:
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind: trace
+
+resilience4j:
+  retry:
+    instances:
+      hubClient:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - com.sparta.logistics.infrastructure.feign.exception.FeignApiException
