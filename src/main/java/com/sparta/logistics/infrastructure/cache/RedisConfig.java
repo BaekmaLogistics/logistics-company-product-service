@@ -22,6 +22,7 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
+import java.util.Set;
 
 /**
  * Redis 공통 설정.
@@ -54,7 +55,9 @@ public class RedisConfig {
     public RedisConnectionFactory redisConnectionFactory(
             @Value("${spring.data.redis.host}") String host,
             @Value("${spring.data.redis.port}") int port) {
-        return new LettuceConnectionFactory(host, port);
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(host, port);
+        factory.afterPropertiesSet();
+        return factory;
     }
 
     /**
@@ -101,11 +104,12 @@ public class RedisConfig {
         PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfSubType("com.sparta.logistics")
                 .allowIfSubType("java.util")
+                .allowIfSubType("java.time")
                 .build();
 
         objectMapper.activateDefaultTyping(
                 ptv,
-                ObjectMapper.DefaultTyping.NON_FINAL
+                ObjectMapper.DefaultTyping.EVERYTHING
         );
 
         return objectMapper;
@@ -140,6 +144,7 @@ public class RedisConfig {
 
         return RedisCacheManager.builder(cf)
                 .cacheDefaults(defaultConfig)
+                .initialCacheNames(Set.of("companyList", "productList"))
                 .build();
     }
 
