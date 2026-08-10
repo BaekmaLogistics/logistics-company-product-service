@@ -72,6 +72,8 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
             log.warn("삭제된 상품 수정 시도: id={}", id);
             throw new ApiException(ErrorResponseCode.PRODUCT_ALREADY_DELETED);
         }
+        // TODO : 권한 확인 ( MASTER / HUB_MANAGER / COMPANY_MANAGER )
+        // TODO : 게이트웨이 인증 / 인가 방식 확정 후 헤더에서 role, userId 꺼내서 검증 로직 추가
 
         // null이 아닌 필드만 갱신 (부분 수정)
         product.update(request.name());
@@ -94,6 +96,8 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
             log.info("이미 삭제된 상품 재삭제 요청(멱등 처리): id={}", id);
             return;
         }
+
+        // TODO : 권한 확인
 
         product.softDelete(null);
         log.info("상품 삭제 완료: id={}", id);
