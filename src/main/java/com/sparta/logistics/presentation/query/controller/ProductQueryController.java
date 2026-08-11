@@ -9,19 +9,23 @@ import com.sparta.logistics.application.query.usecase.product.GetProductListUseC
 import com.sparta.logistics.application.query.usecase.product.GetProductUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+        import java.util.List;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
+@Validated
 public class ProductQueryController {
 
     private final GetProductUseCase getProductUseCase;
@@ -47,7 +51,7 @@ public class ProductQueryController {
 
     @GetMapping("/popular")
     public ResponseEntity<GeneralResponse<List<PopularProductResponseDto>>> getPopularProducts(
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit) {
 
         List<PopularProductResponseDto> response = getPopularProductsUseCase.getPopularProducts(limit);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.PRODUCT_LIST_FOUND, response);

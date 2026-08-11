@@ -101,6 +101,18 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
             hubCacheService.getHub(request.hubId());
         }
 
+        // 이름이 실제로 바뀌는 요청이고, 그 이름이 자기 자신이 아닌 다른 업체와 중복되면 거부
+        if (request.name() != null && !request.name().equals(company.getName())) {
+            String lockKey = "lock:company:name:" + request.name();
+            return distributedLockExecutor.executeWithLock(lockKey, () -> {
+                if (companyRepository.existsByNameAndDeletedAtIsNull(request.name())) {
+                    throw new ApiException(ErrorResponseCode.COMPANY_NAME_DUPLICATED);
+                }
+                company.update(request.name(), request.address(), request.hubId());
+                return CompanyResponseDto.from(company);
+            });
+        }
+
         company.update(request.name(), request.address(), request.hubId());
         log.info("업체 수정 완료: id={}, name = {}, address = {}, hub_id = {}",
                 id, request.name(), request.address(), request.hubId());

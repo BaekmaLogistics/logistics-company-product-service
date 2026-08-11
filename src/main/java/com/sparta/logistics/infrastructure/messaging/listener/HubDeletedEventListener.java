@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class HubDeletedEventListener {
     private final CompanyCommandService companyCommandService;
 
-    @RabbitListener(queues = "${message.queue.company}")
+    @RabbitListener(queues = "${message.queue.company-hub-deleted}")
     public void handleHubDeleted(EventEnvelope<HubDeletedPayload> envelope) {
         if(!"HubDeleted".equals(envelope.header().eventType())) {
             return;
