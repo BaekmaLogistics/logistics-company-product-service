@@ -9,6 +9,7 @@ import com.sparta.logistics.application.command.usecase.company.DeleteCompanyUse
 import com.sparta.logistics.application.command.usecase.company.UpdateCompanyUseCase;
 import com.sparta.logistics.application.common.AuthorizationChecker;
 import com.sparta.logistics.application.common.DistributedLockExecutor;
+import com.sparta.logistics.application.common.HubCacheService;
 import com.sparta.logistics.application.common.HubValidator;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
@@ -36,7 +37,7 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
     //private final HubClient hubClient;
     private final ProductRepository productRepository;
     private final AuthorizationChecker authorizationChecker;
-    private final HubValidator hubValidator;
+    private final HubCacheService hubCacheService;
     private final DistributedLockExecutor distributedLockExecutor;
 
     @CacheEvict(value = "companyList", key = "'default'")
@@ -57,8 +58,8 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
 //            throw new ApiException(ErrorResponseCode.HUB_NOT_FOUND);
 //        }
 
-        // hubId가 실제 존재하는 허브인지 검증 (내부적으로 Resilience4j 재시도 + 실패 시 예외 변환까지 처리됨)
-        hubValidator.validateHub(request.hubId());
+        // hubId가 실제 존재하는 허브인지 검증 (캐시 우선 조회 → 미스 시 HubValidator가 Retry+CircuitBreaker 적용해 조회)
+        hubCacheService.getHub(request.hubId());
 
         String lockKey = "lock:company:name:" + request.name();
 
@@ -112,7 +113,7 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
 
         // hubId를 새로 요청한 경우에만 존재 여부 검증 (null이면 hubId 변경 없이 name/address만 수정하는 요청)
         if (request.hubId() != null) {
-            hubValidator.validateHub(request.hubId());
+            hubCacheService.getHub(request.hubId());
         }
 
         company.update(request.name(), request.address(), request.hubId());
@@ -159,5 +160,21 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
                     log.warn("존재하지 않는 업체 {} 시도: id={}", actionName, id);
                     return new ApiException(ErrorResponseCode.COMPANY_NOT_FOUND);
                 });
+    }
+
+
+    @CacheEvict(value = "companyList", key = "'default'")
+    public void deactivateByHubId(UUID hubId) {
+        List<Company> companies = companyRepository.findAllByHubIdAndDeletedAtIsNull(hubId);
+
+        for(Company company : companies) {
+            company.softDelete(null);
+            List<Product> products = productRepository.findAllByCompanyIdAndDeletedAtIsNull(company.getId());
+            products.forEach(product -> product.softDelete(null));
+        }
+
+        hubCacheService.evictHub(hubId);   // Hub 삭제 이벤트 처리 시 hubInfo 캐시도 함께 무효화
+
+        log.info("Hub 삭제로 인한 업체 비활성화 완료: hubId={}, 처리된 업체 수={}", hubId, companies.size());
     }
 }
