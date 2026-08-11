@@ -22,6 +22,7 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -142,9 +143,13 @@ public class RedisConfig {
                 // 형태 지정 저장
                 .computePrefixWith(cacheName -> serviceName + "::" + cacheName + "::");
 
+        // Hub 정보는 17개 고정값이라 훨씬 긴 TTL 적용 (삭제 이벤트로 evict되므로 stale 위험도 낮음)
+        RedisCacheConfiguration hubInfoConfig = defaultConfig.entryTtl(Duration.ofHours(1));
+
         return RedisCacheManager.builder(cf)
                 .cacheDefaults(defaultConfig)
-                .initialCacheNames(Set.of("companyList", "productList"))
+                .withInitialCacheConfigurations(Map.of("hubInfo", hubInfoConfig))
+                .initialCacheNames(Set.of("companyList", "productList", "hubInfo"))
                 .build();
     }
 

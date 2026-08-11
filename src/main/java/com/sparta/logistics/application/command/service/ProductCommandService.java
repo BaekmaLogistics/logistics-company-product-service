@@ -7,6 +7,7 @@ import com.sparta.logistics.application.command.usecase.product.CreateProductUse
 import com.sparta.logistics.application.command.usecase.product.DeleteProductUseCase;
 import com.sparta.logistics.application.command.usecase.product.UpdateProductUseCase;
 import com.sparta.logistics.application.common.AuthorizationChecker;
+import com.sparta.logistics.application.common.HubCacheService;
 import com.sparta.logistics.application.common.HubValidator;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
@@ -33,8 +34,7 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
     private final CompanyRepository companyRepository;
     //private final HubClient hubClient;
     private final AuthorizationChecker authorizationChecker;
-    private final HubValidator hubValidator;
-
+    private final HubCacheService hubCacheService;
     @CacheEvict(value = "productList", key = "'default'")
     @Override
     public ProductResponseDto create(ProductCreateRequestDto request, UUID userId, UserRole role){
@@ -63,7 +63,7 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
 //        }
 
         // 업체가 속한 허브가 실제 존재하는지 검증 (Resilience4j 재시도 + 실패 시 예외 변환 포함)
-        hubValidator.validateHub(company.getHubId());
+        hubCacheService.getHub(company.getHubId());
 
         Product product = Product.create(
                 request.name(),

@@ -12,6 +12,6 @@ import java.util.UUID;
 @FeignClient(name = "hub-client", url = "${hub.service.url}")
 public interface HubClient {
 
-    @GetMapping("/internal/api/v1/hubs/{hubId}")
+    @GetMapping("/api/v1/hubs/{hubId}")
     HubApiResponse<HubResponseDto> getHub(@PathVariable("hubId") UUID hubId);
 }

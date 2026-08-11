@@ -28,7 +28,7 @@ public class RedissonConfig {
      * 이걸 안 해주면 애플리케이션 종료 시 리소스가 안 닫혀서 스레드가 계속 떠있는 등의 문제가 생길 수 있음.
      */
     @Bean(destroyMethod = "shutdown")
-    public RedissonClient  redissonConfig() {
+    public RedissonClient redissonClient() {
 
         // Redisson 자체 설정 객체
         Config config = new Config();
