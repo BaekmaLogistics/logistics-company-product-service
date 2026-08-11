@@ -5,7 +5,7 @@ import com.sparta.logistics.application.command.dto.product.ProductResponseDto;
 import com.sparta.logistics.application.command.dto.product.ProductUpdateRequestDto;
 import com.sparta.logistics.application.command.service.ProductCommandService;
 import com.sparta.logistics.application.common.AuthorizationChecker;
-import com.sparta.logistics.application.common.HubValidator;
+import com.sparta.logistics.application.common.HubCacheService;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
@@ -14,14 +14,13 @@ import com.sparta.logistics.domain.model.CompanyType;
 import com.sparta.logistics.domain.model.UserRole;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
 import com.sparta.logistics.domain.repository.product.ProductRepository;
-import com.sparta.logistics.infrastructure.feign.client.HubClient;
-import com.sparta.logistics.infrastructure.feign.exception.FeignApiException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -40,10 +39,13 @@ public class ProductCommandServiceTest {
     private CompanyRepository companyRepository;
 
     @Mock
-    private HubValidator hubValidator;
+    private HubCacheService hubCacheService;
 
     @Mock
     private AuthorizationChecker authorizationChecker;
+
+    @Mock
+    private RedisTemplate<String, Object> redisTemplate;
 
     @InjectMocks
     private ProductCommandService productCommandService;
@@ -68,7 +70,7 @@ public class ProductCommandServiceTest {
 
         assertThat(response.name()).isEqualTo("상품");
         verify(productRepository, times(1)).save(any(Product.class));
-        verify(hubValidator, times(1)).validateHub(hubId);
+        verify(hubCacheService, times(1)).getHub(hubId);
 
     }
 
@@ -97,13 +99,49 @@ public class ProductCommandServiceTest {
 
         when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
         doThrow(new ApiException(ErrorResponseCode.HUB_NOT_FOUND))
-                .when(hubValidator).validateHub(invalidHubId);
+                .when(hubCacheService).getHub(invalidHubId);
 
 
         assertThatThrownBy(() -> productCommandService.create(request, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
 
         verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    @DisplayName("상품 생성 성공 - HUB_MANAGER가 담당 허브 소속 업체에 생성하면 성공")
+    void create_hubManager_ownHub_success() {
+        UUID companyId = UUID.randomUUID();
+        UUID hubId = UUID.randomUUID();
+        Company company = Company.create("업체", CompanyType.SUPPLIER, hubId, "주소");
+        ProductCreateRequestDto request = new ProductCreateRequestDto("상품", companyId);
+
+        when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
+        Product savedProduct = Product.create(request.name(), request.companyId());
+        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+
+        ProductResponseDto response = productCommandService.create(request, userId, UserRole.HUB_MANAGER);
+
+        assertThat(response.name()).isEqualTo("상품");
+        verify(authorizationChecker, times(1)).checkHubOwnership(userId, hubId);
+    }
+
+    @Test
+    @DisplayName("상품 생성 성공 - SUPPLIER_MANAGER가 본인 업체에 생성하면 성공")
+    void create_supplierManager_ownCompany_success() {
+        UUID companyId = UUID.randomUUID();
+        UUID hubId = UUID.randomUUID();
+        Company company = Company.create("업체", CompanyType.SUPPLIER, hubId, "주소");
+        ProductCreateRequestDto request = new ProductCreateRequestDto("상품", companyId);
+
+        when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
+        Product savedProduct = Product.create(request.name(), request.companyId());
+        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+
+        ProductResponseDto response = productCommandService.create(request, userId, UserRole.SUPPLIER_MANAGER);
+
+        assertThat(response.name()).isEqualTo("상품");
+        verify(authorizationChecker, times(1)).checkCompanyOwnership(userId, companyId);
     }
 
     @Test
@@ -164,11 +202,14 @@ public class ProductCommandServiceTest {
         when(productRepository.findById(productId)).thenReturn(Optional.of(existingProduct));
         when(companyRepository.findByIdAndDeletedAtIsNull(companyId)).thenReturn(Optional.of(company));
 
+        var zSetOps = mock(org.springframework.data.redis.core.ZSetOperations.class);
+        when(redisTemplate.opsForZSet()).thenReturn(zSetOps);
+
         productCommandService.delete(productId, userId, UserRole.MASTER);
 
         assertThat(existingProduct.getDeletedAt()).isNotNull();
+        verify(zSetOps, times(1)).remove(anyString(), eq(productId.toString()));
     }
-
     @Test
     @DisplayName("상품 삭제 - 이미 삭제된 상품 재삭제 요청은 에러 없이 종료(멱등)")
     void delete_alreadyDeleted_idempotent() {
