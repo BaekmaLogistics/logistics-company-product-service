@@ -18,6 +18,7 @@ import com.sparta.logistics.domain.repository.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,11 +30,14 @@ import java.util.UUID;
 @Transactional
 public class ProductCommandService implements CreateProductUseCase, UpdateProductUseCase, DeleteProductUseCase {
 
+    private static final String POPULAR_PRODUCTS_KEY = "popular:products";
+
     private final ProductRepository productRepository;
     private final CompanyRepository companyRepository;
-    //private final HubClient hubClient;
     private final AuthorizationChecker authorizationChecker;
     private final HubCacheService hubCacheService;
+    private final RedisTemplate<String, Object> redisTemplate;
+
     @CacheEvict(value = "productList", key = "'default'")
     @Override
     public ProductResponseDto create(ProductCreateRequestDto request, UUID userId, UserRole role){
@@ -120,6 +124,11 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
         }
 
         product.softDelete(userId);
+
+        // 인기 상품 집계에서도 제거 (삭제된 상품이 순위에 남지 않도록)
+        redisTemplate.opsForZSet().remove(POPULAR_PRODUCTS_KEY, id.toString());
+
+
         log.info("상품 삭제 완료: id={}", id);
     }
 

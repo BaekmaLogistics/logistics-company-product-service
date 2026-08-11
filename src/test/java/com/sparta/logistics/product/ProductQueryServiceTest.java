@@ -3,6 +3,7 @@ import com.sparta.logistics.application.query.dto.product.ProductDetailResponseD
 import com.sparta.logistics.application.query.dto.product.ProductListResponseDto;
 import com.sparta.logistics.application.query.dto.product.ProductSearchRequestDto;
 import com.sparta.logistics.application.query.dto.product.ProductSearchResult;
+import com.sparta.logistics.application.query.service.ProductCacheService;
 import com.sparta.logistics.application.query.service.ProductQueryService;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import java.time.Instant;
 import java.util.List;
@@ -42,6 +44,12 @@ public class ProductQueryServiceTest {
 
     @Mock
     private ProductQueryRepository productQueryRepository;
+
+    @Mock
+    private ProductCacheService productCacheService;
+
+    @Mock
+    private RedisTemplate<String, Object> redisTemplate;
 
     @InjectMocks
     private ProductQueryService productQueryService;
@@ -93,7 +101,7 @@ public class ProductQueryServiceTest {
 
 
     @Test
-    @DisplayName("상품 목록 조회 성공 - 검색조건 없이 기본 페이징 결과 반환")
+    @DisplayName("상품 목록 조회 성공 - 검색조건 없이 기본 페이징 결과 반환 (캐시 경로)")
     void getList_success() {
         Pageable pageable = PageRequest.of(0, 10);
         ProductSearchRequestDto condition = new ProductSearchRequestDto(null, null);
@@ -103,8 +111,12 @@ public class ProductQueryServiceTest {
                 Instant.now(), Instant.now()
         );
         Page<ProductSearchResult> page = new PageImpl<>(List.of(result), pageable, 1);
+        ProductListResponseDto expectedResponse = ProductListResponseDto.from(page);
 
-        when(productQueryRepository.search(condition, pageable)).thenReturn(page);
+        // 조건 없는 기본 조회는 캐시 서비스 경로를 타므로 productCacheService를 stub
+        when(productCacheService.getDefaultList()).thenReturn(expectedResponse);
+
+        //when(productQueryRepository.search(condition, pageable)).thenReturn(page);
 
         ProductListResponseDto response = productQueryService.getList(condition, pageable);
 
@@ -112,6 +124,7 @@ public class ProductQueryServiceTest {
         assertThat(response.content().get(0).name()).isEqualTo("상품");
         assertThat(response.content().get(0).companyName()).isEqualTo("업체");
         assertThat(response.totalElements()).isEqualTo(1);
+        verify(productCacheService, times(1)).getDefaultList();
     }
 
     @Test
@@ -126,6 +139,7 @@ public class ProductQueryServiceTest {
         productQueryService.getList(condition, pageable);
 
         verify(productQueryRepository, times(1)).search(condition, pageable);
+        verify(productCacheService, never()).getDefaultList();
     }
 
     @Test
@@ -135,7 +149,11 @@ public class ProductQueryServiceTest {
         ProductSearchRequestDto condition = new ProductSearchRequestDto(null, null);
 
         Page<ProductSearchResult> emptyPage = new PageImpl<>(List.of(), pageable, 0);
-        when(productQueryRepository.search(condition, pageable)).thenReturn(emptyPage);
+        ProductListResponseDto emptyResponse = ProductListResponseDto.from(emptyPage);
+
+        when(productCacheService.getDefaultList()).thenReturn(emptyResponse);
+
+        //when(productQueryRepository.search(condition, pageable)).thenReturn(emptyPage);
 
         ProductListResponseDto response = productQueryService.getList(condition, pageable);
 

@@ -3,6 +3,7 @@ package com.sparta.logistics.company;
 import com.sparta.logistics.application.query.dto.company.CompanyDetailResponseDto;
 import com.sparta.logistics.application.query.dto.company.CompanyListResponseDto;
 import com.sparta.logistics.application.query.dto.company.CompanySearchRequestDto;
+import com.sparta.logistics.application.query.service.CompanyCacheService;
 import com.sparta.logistics.application.query.service.CompanyQueryService;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
@@ -36,6 +37,9 @@ public class CompanyQueryServiceTest {
 
     @Mock
     private CompanyQueryRepository companyQueryRepository;
+
+    @Mock
+    private CompanyCacheService companyCacheService;
 
     @InjectMocks
     private CompanyQueryService companyQueryService;
@@ -73,8 +77,11 @@ public class CompanyQueryServiceTest {
 
         Company company = Company.create("업체", CompanyType.SUPPLIER, UUID.randomUUID(), "주소");
         Page<Company> page = new PageImpl<>(List.of(company), pageable, 1);
+        CompanyListResponseDto expectedResponse = CompanyListResponseDto.from(page);
 
-        when(companyQueryRepository.search(condition, pageable)).thenReturn(page);
+        //when(companyQueryRepository.search(condition, pageable)).thenReturn(page);
+        // 조건 없는 기본 조회는 캐시 서비스 경로를 타므로 companyCacheService를 stub
+        when(companyCacheService.getDefaultList()).thenReturn(expectedResponse);
 
         CompanyListResponseDto response = companyQueryService.getList(condition, pageable);
 
@@ -83,6 +90,8 @@ public class CompanyQueryServiceTest {
         assertThat(response.totalElements()).isEqualTo(1);
         assertThat(response.page()).isEqualTo(0);
         assertThat(response.size()).isEqualTo(10);
+        verify(companyCacheService, times(1)).getDefaultList();
+
     }
 
     @Test
@@ -98,6 +107,7 @@ public class CompanyQueryServiceTest {
         companyQueryService.getList(condition, pageable);
 
         verify(companyQueryRepository, times(1)).search(condition, pageable);
+        verify(companyCacheService, never()).getDefaultList();
     }
 
     @Test
@@ -107,7 +117,10 @@ public class CompanyQueryServiceTest {
         CompanySearchRequestDto condition = new CompanySearchRequestDto(null, null, null);
 
         Page<Company> emptyPage = new PageImpl<>(List.of(), pageable, 0);
-        when(companyQueryRepository.search(condition, pageable)).thenReturn(emptyPage);
+        CompanyListResponseDto emptyResponse = CompanyListResponseDto.from(emptyPage);
+        when(companyCacheService.getDefaultList()).thenReturn(emptyResponse);
+
+        //when(companyQueryRepository.search(condition, pageable)).thenReturn(emptyPage);
 
         CompanyListResponseDto response = companyQueryService.getList(condition, pageable);
 

@@ -5,7 +5,8 @@ import com.sparta.logistics.application.command.dto.company.CompanyResponseDto;
 import com.sparta.logistics.application.command.dto.company.CompanyUpdateRequestDto;
 import com.sparta.logistics.application.command.service.CompanyCommandService;
 import com.sparta.logistics.application.common.AuthorizationChecker;
-import com.sparta.logistics.application.common.HubValidator;
+import com.sparta.logistics.application.common.DistributedLockExecutor;
+import com.sparta.logistics.application.common.HubCacheService;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
@@ -29,6 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
+import org.junit.jupiter.api.BeforeEach;
+import java.util.concurrent.Callable;
+
 @ExtendWith(MockitoExtension.class)
 public class CompanyCommandServiceTest {
 
@@ -39,7 +43,7 @@ public class CompanyCommandServiceTest {
     private ProductRepository productRepository;
 
     @Mock
-    private HubValidator hubValidator;
+    private HubCacheService hubCacheService;
 
     @InjectMocks
     private CompanyCommandService companyCommandService;
@@ -47,7 +51,19 @@ public class CompanyCommandServiceTest {
     @Mock
     private AuthorizationChecker authorizationChecker;
 
+    @Mock
+    private DistributedLockExecutor distributedLockExecutor;
+
     private final UUID userId = UUID.randomUUID();
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(distributedLockExecutor.executeWithLock(anyString(), any(Callable.class)))
+                .thenAnswer(invocation -> {
+                    Callable<?> action = invocation.getArgument(1);
+                    return action.call();
+                });
+    }
 
     @Test
     @DisplayName("업체 생성 성공 - hubId가 유효하고 이름 중복이 없으면 정상 생성")
@@ -89,7 +105,7 @@ public class CompanyCommandServiceTest {
                 //new FeignApiException("HUB_NOT_FOUND", "존재하지 않는 허브입니다.", 404));
 
         doThrow(new ApiException(ErrorResponseCode.HUB_NOT_FOUND))
-                .when(hubValidator).validateHub(invalidHubId);
+                .when(hubCacheService).getHub(invalidHubId);
 
         //when & then  : ApiException이 발생하고, 저장 로직까지 도달하지 않아야 함
         assertThatThrownBy(()-> companyCommandService.create(request, userId, UserRole.MASTER))
@@ -134,8 +150,7 @@ public class CompanyCommandServiceTest {
 
         // then : 실제로 name, address, hubId가 바뀌었는지 확인
         assertThat(response.name()).isEqualTo("수정된업체명");
-        verify(hubValidator, times(1)).validateHub(newHubId);
-    }
+        verify(hubCacheService, times(1)).getHub(newHubId);    }
 
     @Test
     @DisplayName("업체 수정 실패 - 존재하지 않는 hubId로 수정하면 예외가 발생")
@@ -152,7 +167,7 @@ public class CompanyCommandServiceTest {
                         //.thenThrow(new FeignApiException("HUB_NOT_FOUND", "존재하지 않는 허브입니다.", 404));
 
         doThrow(new ApiException(ErrorResponseCode.HUB_NOT_FOUND))
-                .when(hubValidator).validateHub(invalidHubId);
+                .when(hubCacheService).getHub(invalidHubId);
 
         // when & then
         assertThatThrownBy(() -> companyCommandService.update(companyId, request, userId, UserRole.MASTER))
@@ -177,8 +192,7 @@ public class CompanyCommandServiceTest {
 
         // then : hubClient가 아예 호출되지 않아야 함 (검증 스킵 확인)
         assertThat(response.name()).isEqualTo("수정된업체명");
-        //verify(hubClient, never()).getHub(any());
-        verify(hubValidator, never()).validateHub(any());
+        verify(hubCacheService, never()).getHub(any());
     }
 
     @Test
@@ -246,4 +260,52 @@ public class CompanyCommandServiceTest {
         assertThatThrownBy(() -> companyCommandService.delete(companyId, userId, UserRole.MASTER))
                 .isInstanceOf(ApiException.class);
     }
+
+    @Test
+    @DisplayName("업체 생성 성공 - HUB_MANAGER가 담당 허브로 생성하면 성공")
+    void create_hubManager_ownHub_success() {
+        UUID hubId = UUID.randomUUID();
+        CompanyCreateRequestDto request = new CompanyCreateRequestDto(
+                "테스트업체", CompanyType.SUPPLIER, hubId, "서울시 어딘가"
+        );
+        when(companyRepository.existsByNameAndDeletedAtIsNull(request.name())).thenReturn(false);
+        Company savedCompany = Company.create(request.name(), request.type(), request.hubId(), request.address());
+        when(companyRepository.save(any(Company.class))).thenReturn(savedCompany);
+
+        CompanyResponseDto response = companyCommandService.create(request, userId, UserRole.HUB_MANAGER);
+
+        assertThat(response.name()).isEqualTo("테스트업체");
+        verify(authorizationChecker, times(1)).checkHubOwnership(userId, hubId);
+    }
+
+    @Test
+    @DisplayName("업체 생성 실패 - HUB_MANAGER가 담당 아닌 허브로 생성 시도하면 예외 발생")
+    void create_hubManager_notOwnHub_throwsException() {
+        UUID hubId = UUID.randomUUID();
+        CompanyCreateRequestDto request = new CompanyCreateRequestDto(
+                "테스트업체", CompanyType.SUPPLIER, hubId, "서울시 어딘가"
+        );
+        doThrow(new ApiException(ErrorResponseCode.COMPANY_ACCESS_DENIED))
+                .when(authorizationChecker).checkHubOwnership(userId, hubId);
+
+        assertThatThrownBy(() -> companyCommandService.create(request, userId, UserRole.HUB_MANAGER))
+                .isInstanceOf(ApiException.class);
+
+        verify(companyRepository, never()).save(any(Company.class));
+    }
+
+    @Test
+    @DisplayName("업체 생성 실패 - SUPPLIER_MANAGER는 생성 권한이 없어 예외 발생")
+    void create_supplierManager_denied() {
+        UUID hubId = UUID.randomUUID();
+        CompanyCreateRequestDto request = new CompanyCreateRequestDto(
+                "테스트업체", CompanyType.SUPPLIER, hubId, "서울시 어딘가"
+        );
+
+        assertThatThrownBy(() -> companyCommandService.create(request, userId, UserRole.SUPPLIER_MANAGER))
+                .isInstanceOf(ApiException.class);
+
+        verify(companyRepository, never()).save(any(Company.class));
+    }
+
 }
