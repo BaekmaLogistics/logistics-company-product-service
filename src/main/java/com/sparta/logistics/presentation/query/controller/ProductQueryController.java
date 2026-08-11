@@ -1,8 +1,10 @@
 package com.sparta.logistics.presentation.query.controller;
 
+import com.sparta.logistics.application.query.dto.product.PopularProductResponseDto;
 import com.sparta.logistics.application.query.dto.product.ProductDetailResponseDto;
 import com.sparta.logistics.application.query.dto.product.ProductListResponseDto;
 import com.sparta.logistics.application.query.dto.product.ProductSearchRequestDto;
+import com.sparta.logistics.application.query.usecase.product.GetPopularProductsUseCase;
 import com.sparta.logistics.application.query.usecase.product.GetProductListUseCase;
 import com.sparta.logistics.application.query.usecase.product.GetProductUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
@@ -12,11 +14,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -26,6 +26,7 @@ public class ProductQueryController {
 
     private final GetProductUseCase getProductUseCase;
     private final GetProductListUseCase getProductListUseCase;
+    private final GetPopularProductsUseCase getPopularProductsUseCase;
 
     @GetMapping("/{productId}")
     public ResponseEntity<GeneralResponse<ProductDetailResponseDto>> getProduct(
@@ -41,6 +42,14 @@ public class ProductQueryController {
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         ProductListResponseDto response = getProductListUseCase.getList(condition, pageable);
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.PRODUCT_LIST_FOUND, response);
+    }
+
+    @GetMapping("/popular")
+    public ResponseEntity<GeneralResponse<List<PopularProductResponseDto>>> getPopularProducts(
+            @RequestParam(defaultValue = "10") int limit) {
+
+        List<PopularProductResponseDto> response = getPopularProductsUseCase.getPopularProducts(limit);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.PRODUCT_LIST_FOUND, response);
     }
 }
