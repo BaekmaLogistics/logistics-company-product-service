@@ -10,4 +10,6 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, UUID> {
     Optional<Product> findByIdAndDeletedAtIsNull(UUID productId);
     List<Product> findAllByCompanyIdAndDeletedAtIsNull(UUID companyId);
+    // 여러 companyId를 한 번에 조회 (N+1 방지)
+    List<Product> findAllByCompanyIdInAndDeletedAtIsNull(List<UUID> companyIds);
 }

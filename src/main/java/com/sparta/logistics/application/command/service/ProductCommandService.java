@@ -8,7 +8,6 @@ import com.sparta.logistics.application.command.usecase.product.DeleteProductUse
 import com.sparta.logistics.application.command.usecase.product.UpdateProductUseCase;
 import com.sparta.logistics.application.common.AuthorizationChecker;
 import com.sparta.logistics.application.common.HubCacheService;
-import com.sparta.logistics.application.common.HubValidator;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
@@ -38,12 +37,7 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
     @CacheEvict(value = "productList", key = "'default'")
     @Override
     public ProductResponseDto create(ProductCreateRequestDto request, UUID userId, UserRole role){
-        // 소속 업체가 실제 존재하는지 검증 (없으면 COMPANY_NOT_FOUND)
-//        Company company = companyRepository.findByIdAndDeletedAtIsNull(request.companyId())
-//                .orElseThrow(()->{
-//            log.warn("업체가 존재하지 않습니다. companyId = {}", request.companyId());
-//            return new ApiException(ErrorResponseCode.COMPANY_NOT_FOUND);
-//        });
+
         Company company = findCompanyOrThrow(request.companyId(), null);
 
         // 상품 생성은 MASTER/HUB_MANAGER(담당 허브)/SUPPLIER_MANAGER(본인 업체)만 가능
@@ -54,13 +48,6 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
             default -> throw new ApiException(ErrorResponseCode.PRODUCT_ACCESS_DENIED);
         }
 
-        // 업체의 허브ID로 허브 존재 검증
-//        try{
-//            hubClient.getHub(company.getHubId());
-//        } catch (FeignException.FeignClientException e) {
-//            log.warn("상품 생성 실패 - 존재하지 않는 허브: hubId={}", company.getHubId());
-//            throw new ApiException(ErrorResponseCode.HUB_NOT_FOUND);
-//        }
 
         // 업체가 속한 허브가 실제 존재하는지 검증 (Resilience4j 재시도 + 실패 시 예외 변환 포함)
         hubCacheService.getHub(company.getHubId());
@@ -132,12 +119,12 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
             default -> throw new ApiException(ErrorResponseCode.PRODUCT_ACCESS_DENIED);
         }
 
-        product.softDelete(null);
+        product.softDelete(userId);
         log.info("상품 삭제 완료: id={}", id);
     }
 
     /**
-     * companyId로 삭제되지 않은 업체를 조회하며, 없으면 COMPANY_NOT_FOUND 예외를 던진다.
+     * companyId로 삭제되지 않은 업체를 조회하며, 없으면 예외를 던진다.
      * productId는 로그 추적용이며, 상품이 아직 없는 생성 시점에는 null을 넘긴다.
      */
     private Company findCompanyOrThrow(UUID companyId, UUID productId) {
@@ -145,7 +132,5 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
             log.warn("업체가 존재하지 않습니다: productId={}, companyId={}", productId, companyId);
             return new ApiException(ErrorResponseCode.COMPANY_NOT_FOUND);
         });
-
     }
-
 }

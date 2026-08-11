@@ -10,7 +10,6 @@ import com.sparta.logistics.application.command.usecase.company.UpdateCompanyUse
 import com.sparta.logistics.application.common.AuthorizationChecker;
 import com.sparta.logistics.application.common.DistributedLockExecutor;
 import com.sparta.logistics.application.common.HubCacheService;
-import com.sparta.logistics.application.common.HubValidator;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.domain.entity.Company;
@@ -34,7 +33,6 @@ import java.util.UUID;
 public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompanyUseCase, DeleteCompanyUseCase {
 
     private final CompanyRepository companyRepository;
-    //private final HubClient hubClient;
     private final ProductRepository productRepository;
     private final AuthorizationChecker authorizationChecker;
     private final HubCacheService hubCacheService;
@@ -44,19 +42,15 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
     @Override
     public CompanyResponseDto create(CompanyCreateRequestDto request, UUID userId, UserRole role) {
 
-        // 생성은 MASTER / HUB_MASTER만 가능 - role만으로 판단가능
-        if(role != UserRole.MASTER && role != UserRole.HUB_MANAGER) {
-            log.warn("업체 생성 권한 없음: userId={}, role={}", userId, role);
-            throw new ApiException(ErrorResponseCode.COMPANY_ACCESS_DENIED);
+        // 생성은 MASTER / HUB_MASTER만 가능
+        switch (role) {
+            case MASTER -> { /* 통과 */ }
+            case HUB_MANAGER -> authorizationChecker.checkHubOwnership(userId, request.hubId());
+            default -> {
+                log.warn("업체 생성 권한 없음: userId={}, role={}", userId, role);
+                throw new ApiException(ErrorResponseCode.COMPANY_ACCESS_DENIED);
+            }
         }
-
-        // hubId 존재 검증 ( Hub 서비스에 FeignClient로 확인 )
-//        try{
-//            hubClient.getHub(request.hubId());
-//        } catch (FeignApiException e) {
-//            log.warn("업체 생성 실패 - 존재하지 않는 허브: hubId={}", request.hubId());
-//            throw new ApiException(ErrorResponseCode.HUB_NOT_FOUND);
-//        }
 
         // hubId가 실제 존재하는 허브인지 검증 (캐시 우선 조회 → 미스 시 HubValidator가 Retry+CircuitBreaker 적용해 조회)
         hubCacheService.getHub(request.hubId());
@@ -102,15 +96,6 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
             default -> throw new ApiException(ErrorResponseCode.COMPANY_ACCESS_DENIED);
         }
 
-//        if(request.hubId() != null) {
-//            try{
-//                hubClient.getHub(request.hubId());
-//            } catch (FeignApiException e) {
-//                log.warn("업체 수정 실패 - 존재하지 않는 허브: hubId={}", request.hubId());
-//                throw new ApiException(ErrorResponseCode.HUB_NOT_FOUND);
-//            }
-//        }
-
         // hubId를 새로 요청한 경우에만 존재 여부 검증 (null이면 hubId 변경 없이 name/address만 수정하는 요청)
         if (request.hubId() != null) {
             hubCacheService.getHub(request.hubId());
@@ -141,18 +126,18 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
             default -> throw new ApiException(ErrorResponseCode.COMPANY_ACCESS_DENIED);
         }
 
-        company.softDelete(null);
+        company.softDelete(userId);
 
         // 소속 상품도 함께 비활성화
         List<Product> products = productRepository.findAllByCompanyIdAndDeletedAtIsNull(id);
-        products.forEach(product -> product.softDelete(null));
+        products.forEach(product -> product.softDelete(userId));
 
         log.info("업체 삭제 완료: id={}", id);
     }
 
     /**
-     * id로 업체를 조회하며, 없으면 COMPANY_NOT_FOUND 예외를 던진다.
-     * actionName은 로그 메시지에 표시할 동작 이름(예: "수정", "삭제")이다.
+     * id로 업체를 조회하며, 없으면 예외를 던진다.
+     * actionName은 로그 메시지에 표시할 동작 이름
      */
     private Company findCompanyOrThrow(UUID id, String actionName) {
         return companyRepository.findById(id)
@@ -167,14 +152,24 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
     public void deactivateByHubId(UUID hubId) {
         List<Company> companies = companyRepository.findAllByHubIdAndDeletedAtIsNull(hubId);
 
-        for(Company company : companies) {
-            company.softDelete(null);
-            List<Product> products = productRepository.findAllByCompanyIdAndDeletedAtIsNull(company.getId());
-            products.forEach(product -> product.softDelete(null));
+        if (companies.isEmpty()) {
+            log.info("Hub {} 소속 활성 업체 없음 - 이미 처리되었거나 신규 삭제 대상 없음 (멱등 처리)", hubId);
+            return;
         }
 
-        hubCacheService.evictHub(hubId);   // Hub 삭제 이벤트 처리 시 hubInfo 캐시도 함께 무효화
+        List<UUID> companyIds = companies.stream()
+                .map(Company::getId)
+                .toList();
 
-        log.info("Hub 삭제로 인한 업체 비활성화 완료: hubId={}, 처리된 업체 수={}", hubId, companies.size());
+        companies.forEach(company -> company.softDelete(null));
+
+        // for문으로 처리하면 안에서 companyId마다 개별 쿼리 (N+1) 문제 발생 -> 한 번에 조회
+        List<Product> products = productRepository.findAllByCompanyIdInAndDeletedAtIsNull(companyIds);
+        products.forEach(product -> product.softDelete(null));
+
+        hubCacheService.evictHub(hubId);
+
+        log.info("Hub 삭제로 인한 업체 비활성화 완료: hubId={}, 처리된 업체 수={}, 처리된 상품 수={}",
+                hubId, companies.size(), products.size());
     }
 }
