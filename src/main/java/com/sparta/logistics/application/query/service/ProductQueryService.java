@@ -31,7 +31,7 @@ public class ProductQueryService implements GetProductUseCase, GetProductListUse
     private final ProductRepository productRepository;
     private final CompanyRepository companyRepository;
     private final ProductQueryRepository productQueryRepository;
-
+    private final ProductCacheService productCacheService;
     @Override
     public ProductDetailResponseDto get(UUID id) {
         Product product = productRepository.findByIdAndDeletedAtIsNull(id)
@@ -51,9 +51,23 @@ public class ProductQueryService implements GetProductUseCase, GetProductListUse
 
     @Override
     public ProductListResponseDto getList(ProductSearchRequestDto condition, Pageable pageable) {
+        if (isDefaultQuery(condition, pageable)) {
+            return productCacheService.getDefaultList();
+        }
+        return searchAndBuildResponse(condition, pageable);
+    }
+
+    private ProductListResponseDto searchAndBuildResponse(ProductSearchRequestDto condition, Pageable pageable) {
         Page<ProductSearchResult> resultPage = productQueryRepository.search(condition, pageable);
         log.info("상품 목록 조회 완료: page={}, size={}, totalElements={}",
                 resultPage.getNumber(), resultPage.getSize(), resultPage.getTotalElements());
         return ProductListResponseDto.from(resultPage);
+    }
+
+    private boolean isDefaultQuery(ProductSearchRequestDto condition, Pageable pageable) {
+        return condition.name() == null
+                && condition.companyName() == null
+                && pageable.getPageNumber() == 0
+                && pageable.getPageSize() == 10;
     }
 }

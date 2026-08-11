@@ -8,6 +8,7 @@ import com.sparta.logistics.application.command.usecase.company.CreateCompanyUse
 import com.sparta.logistics.application.command.usecase.company.DeleteCompanyUseCase;
 import com.sparta.logistics.application.command.usecase.company.UpdateCompanyUseCase;
 import com.sparta.logistics.application.common.AuthorizationChecker;
+import com.sparta.logistics.application.common.DistributedLockExecutor;
 import com.sparta.logistics.application.common.HubValidator;
 import com.sparta.logistics.common.code.ErrorResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
@@ -16,10 +17,9 @@ import com.sparta.logistics.domain.entity.Product;
 import com.sparta.logistics.domain.model.UserRole;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
 import com.sparta.logistics.domain.repository.product.ProductRepository;
-import com.sparta.logistics.infrastructure.feign.client.HubClient;
-import com.sparta.logistics.infrastructure.feign.exception.FeignApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +37,9 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
     private final ProductRepository productRepository;
     private final AuthorizationChecker authorizationChecker;
     private final HubValidator hubValidator;
+    private final DistributedLockExecutor distributedLockExecutor;
 
+    @CacheEvict(value = "companyList", key = "'default'")
     @Override
     public CompanyResponseDto create(CompanyCreateRequestDto request, UUID userId, UserRole role) {
 
@@ -58,23 +60,29 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
         // hubId가 실제 존재하는 허브인지 검증 (내부적으로 Resilience4j 재시도 + 실패 시 예외 변환까지 처리됨)
         hubValidator.validateHub(request.hubId());
 
-        // 같은 이름이 있는지 조회 후 있으면 오류 메시지 검출
-        if(companyRepository.existsByNameAndDeletedAtIsNull(request.name())) {
-            log.warn("업체명 중복으로 생성 실패: name={}", request.name());
-            throw new ApiException(ErrorResponseCode.COMPANY_NAME_DUPLICATED);
-        }
-        Company company = Company.create(
-                request.name(),
-                request.type(),
-                request.hubId(),
-                request.address()
-        );
+        String lockKey = "lock:company:name:" + request.name();
 
-        Company saved = companyRepository.save(company);
-        log.info("업체 생성 완료: id={}, name={}", saved.getId(), saved.getName());
-        return CompanyResponseDto.from(saved);
+        return distributedLockExecutor.executeWithLock(lockKey, () -> {
+            // 같은 이름이 있는지 조회 후 있으면 오류 메시지 검출
+            if (companyRepository.existsByNameAndDeletedAtIsNull(request.name())) {
+                log.warn("업체명 중복으로 생성 실패: name={}", request.name());
+                throw new ApiException(ErrorResponseCode.COMPANY_NAME_DUPLICATED);
+            }
+
+            Company company = Company.create(
+                    request.name(),
+                    request.type(),
+                    request.hubId(),
+                    request.address()
+            );
+
+            Company saved = companyRepository.save(company);
+            log.info("업체 생성 완료: id={}, name={}", saved.getId(), saved.getName());
+            return CompanyResponseDto.from(saved);
+        });
     }
 
+    @CacheEvict(value = "companyList", key = "'default'")
     @Override
     public CompanyResponseDto update(UUID id, CompanyUpdateRequestDto request, UUID userId, UserRole role) {
         Company company = findCompanyOrThrow(id, "수정");
@@ -114,6 +122,7 @@ public class CompanyCommandService implements CreateCompanyUseCase, UpdateCompan
         return CompanyResponseDto.from(company);
     }
 
+    @CacheEvict(value = "companyList", key = "'default'")
     @Override
     public void delete(UUID id, UUID userId, UserRole role) {
         Company company = findCompanyOrThrow(id, "삭제");

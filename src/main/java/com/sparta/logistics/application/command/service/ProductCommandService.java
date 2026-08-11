@@ -15,10 +15,9 @@ import com.sparta.logistics.domain.entity.Product;
 import com.sparta.logistics.domain.model.UserRole;
 import com.sparta.logistics.domain.repository.company.CompanyRepository;
 import com.sparta.logistics.domain.repository.product.ProductRepository;
-import com.sparta.logistics.infrastructure.feign.client.HubClient;
-import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +35,7 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
     private final AuthorizationChecker authorizationChecker;
     private final HubValidator hubValidator;
 
+    @CacheEvict(value = "productList", key = "'default'")
     @Override
     public ProductResponseDto create(ProductCreateRequestDto request, UUID userId, UserRole role){
         // 소속 업체가 실제 존재하는지 검증 (없으면 COMPANY_NOT_FOUND)
@@ -75,6 +75,7 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
         return ProductResponseDto.from(saved);
     }
 
+    @CacheEvict(value = "productList", key = "'default'")
     @Override
     public ProductResponseDto update(UUID id, ProductUpdateRequestDto request, UUID userId, UserRole role) {
         // 존재하지 않는 상품이면 PRODUCT_NOT_FOUND
@@ -106,7 +107,7 @@ public class ProductCommandService implements CreateProductUseCase, UpdateProduc
         return ProductResponseDto.from(product);
     }
 
-
+    @CacheEvict(value = "productList", key = "'default'")
     @Override
     public void delete(UUID id, UUID userId, UserRole role) {
         // 존재한 적 없는 상품이면 PRODUCT_NOT_FOUND
