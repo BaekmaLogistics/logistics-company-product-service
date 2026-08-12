@@ -25,7 +25,7 @@ public class ProductCacheService {
         log.info("[캐시 미스] DB에서 상품 목록 조회 실행");
 
         Page<ProductSearchResult> resultPage = productQueryRepository.search(
-                new ProductSearchRequestDto(null, null),
+                new ProductSearchRequestDto(null, null,null),
                 PageRequest.of(0, 10)
         );
         return ProductListResponseDto.from(resultPage);

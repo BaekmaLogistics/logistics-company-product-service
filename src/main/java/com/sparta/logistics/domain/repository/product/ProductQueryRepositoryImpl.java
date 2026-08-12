@@ -35,6 +35,9 @@ public class ProductQueryRepositoryImpl  implements ProductQueryRepository {
             // companyName은 Product 테이블에 없는 필드라 Company와 join하여 검색
             builder.and(company.name.containsIgnoreCase(condition.companyName()));
         }
+        if (condition.hubId() != null) {
+            builder.and(company.hubId.eq(condition.hubId()));
+        }
 
         builder.and(product.deletedAt.isNull());
         builder.and(company.deletedAt.isNull());
