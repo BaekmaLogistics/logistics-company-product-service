@@ -1,9 +1,6 @@
 package com.sparta.logistics.infrastructure.messaging.config;
 
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.core.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +25,13 @@ public class QueueConfig {
     @Value("${message.queue.company-order-created}")
     private String queueCompanyOrderCreated;
 
+    // DLQ 관련 (처리 실패 메시지를 별도로 격리해 재처리/추적 가능하게 함)
+    @Value("${message.dlx-exchange}")
+    private String dlxExchange;
+    @Value("${message.queue.company-hub-deleted-dlq}")
+    private String queueCompanyHubDeletedDlq;
+    @Value("${message.queue.company-order-created-dlq}")
+    private String queueCompanyOrderCreatedDlq;
 
     @Value("${message.binding-key.notification.inventory-low}")
     private String keyNotificationInventoryLow;
@@ -47,12 +51,53 @@ public class QueueConfig {
 
     @Bean
     public TopicExchange exchange() { return new TopicExchange(exchange); }
+    // DLQ용 Exchange (Dead Letter Exchange) — Direct 타입으로 단순 라우팅
+    @Bean
+    public DirectExchange dlxExchange() { return new DirectExchange(dlxExchange); }
 
     @Bean public Queue queueDelivery() { return new Queue(queueDelivery); }
     @Bean public Queue queueHub() { return new Queue(queueHub); }
     @Bean public Queue queueNotification() { return new Queue(queueNotification); }
-    @Bean public Queue queueCompanyHubDeleted() { return new Queue(queueCompanyHubDeleted); }
-    @Bean public Queue queueCompanyOrderCreated() { return new Queue(queueCompanyOrderCreated); }
+    // 기존 큐에 dead-letter-exchange / dead-letter-routing-key 인자 추가
+    // 처리 실패(재시도 소진 등)로 메시지가 reject/nack 되면 DLX를 통해 DLQ로 라우팅됨
+    @Bean
+    public Queue queueCompanyHubDeleted() {
+        return QueueBuilder.durable(queueCompanyHubDeleted)
+                .withArgument("x-dead-letter-exchange", dlxExchange)
+                .withArgument("x-dead-letter-routing-key", queueCompanyHubDeletedDlq)
+                .build();
+    }
+
+    @Bean
+    public Queue queueCompanyOrderCreated() {
+        return QueueBuilder.durable(queueCompanyOrderCreated)
+                .withArgument("x-dead-letter-exchange", dlxExchange)
+                .withArgument("x-dead-letter-routing-key", queueCompanyOrderCreatedDlq)
+                .build();
+    }
+
+    // DLQ 자체 선언
+    @Bean
+    public Queue queueCompanyHubDeletedDlq() { return new Queue(queueCompanyHubDeletedDlq); }
+
+    @Bean
+    public Queue queueCompanyOrderCreatedDlq() { return new Queue(queueCompanyOrderCreatedDlq); }
+
+    // DLQ 바인딩 (DLX -> DLQ, routing key는 DLQ 이름과 동일하게 사용)
+    @Bean
+    public Binding bindingCompanyHubDeletedDlq() {
+        return BindingBuilder.bind(queueCompanyHubDeletedDlq())
+                .to(dlxExchange())
+                .with(queueCompanyHubDeletedDlq);
+    }
+
+    @Bean
+    public Binding bindingCompanyOrderCreatedDlq() {
+        return BindingBuilder.bind(queueCompanyOrderCreatedDlq())
+                .to(dlxExchange())
+                .with(queueCompanyOrderCreatedDlq);
+    }
+
 
     // Hub -> Notification (재고 부족)
     @Bean

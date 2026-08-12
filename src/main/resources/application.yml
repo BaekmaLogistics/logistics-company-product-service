@@ -36,6 +36,13 @@ spring:
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+        default-requeue-rejected: false
 
   cloud:
     openfeign:
@@ -61,12 +68,16 @@ user:
 
 message:
   exchange: baekma.exchange
+  dlx-exchange: company.dlx
   queue:
     delivery: delivery.queue
     hub: hub.queue
     notification: notification.queue
     company-hub-deleted: company.hub-deleted.queue
     company-order-created: company.order-created.queue
+    company-hub-deleted-dlq: company.hub-deleted.dlq
+    company-order-created-dlq: company.order-created.dlq
+
   binding-key:
     notification:
       inventory-low: hub.inventory.low
