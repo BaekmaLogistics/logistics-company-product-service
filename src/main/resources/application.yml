@@ -63,7 +63,8 @@ message:
     delivery: delivery.queue
     hub: hub.queue
     notification: notification.queue
-    company: company.queue
+    company-hub-deleted: company.hub-deleted.queue
+    company-order-created: company.order-created.queue
   binding-key:
     notification:
       inventory-low: hub.inventory.low
@@ -124,9 +125,23 @@ resilience4j:
         retry-exceptions:
           - com.sparta.logistics.infrastructure.feign.exception.FeignApiException
           - feign.RetryableException
+      userClient: # 추가
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - com.sparta.logistics.infrastructure.feign.exception.FeignApiException
+          - feign.RetryableException
   circuitbreaker:
     instances:
       hubClient:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      userClient:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 10
         minimum-number-of-calls: 5

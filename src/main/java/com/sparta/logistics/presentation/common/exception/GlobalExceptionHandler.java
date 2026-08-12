@@ -1,10 +1,12 @@
 package com.sparta.logistics.presentation.common.exception;
 
 
+import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.common.exception.ApiException;
 import com.sparta.logistics.infrastructure.feign.exception.FeignApiException;
 import com.sparta.logistics.presentation.common.dto.response.ErrorResponse;
 import com.sparta.logistics.common.code.ErrorResponseCode;
+import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
 import feign.RetryableException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -85,5 +88,13 @@ public class GlobalExceptionHandler {
         return ErrorResponse.toResponseEntity(
                 ErrorResponseCode.FEIGN_CLIENT_ERROR
         );
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestHeaderException(
+            MissingRequestHeaderException e, HttpServletRequest request
+    ) {
+        log.warn("필수 헤더 누락: header={}, uri={}", e.getHeaderName(), request.getRequestURI());
+        return ErrorResponse.toResponseEntity(ErrorResponseCode.INVALID_REQUEST);
     }
 }

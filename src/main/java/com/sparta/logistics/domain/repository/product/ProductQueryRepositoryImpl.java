@@ -37,7 +37,7 @@ public class ProductQueryRepositoryImpl  implements ProductQueryRepository {
         }
 
         builder.and(product.deletedAt.isNull());
-
+        builder.and(company.deletedAt.isNull());
         // Company와 join하여 companyName까지 한 번에 조회 (N+1 방지)
         List<ProductSearchResult> content = queryFactory
                 .select(Projections.constructor(

@@ -16,7 +16,7 @@ public class OrderCreatedEventListener {
     private final RedisTemplate<String, Object> redisTemplate;
     private static final String POPULAR_PRODUCTS_KEY = "popular:products";
 
-    @RabbitListener(queues = "${message.queue.company}")
+    @RabbitListener(queues = "${message.queue.company-order-created}")
     public void handleOrderCreated(EventEnvelope<OrderCreatedPayload> envelope) {
         if (!"OrderCreated".equals(envelope.header().eventType())) {
             return;

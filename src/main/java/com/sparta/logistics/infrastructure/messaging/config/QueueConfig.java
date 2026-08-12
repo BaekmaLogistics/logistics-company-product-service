@@ -19,8 +19,15 @@ public class QueueConfig {
     private String queueHub;
     @Value("${message.queue.notification}")
     private String queueNotification;
-    @Value("${message.queue.company}")
-    private String queueCompany;
+
+    // 큐를 이벤트별로 분리 (하나의 큐를 여러 리스너가 공유 구독하면
+    // RabbitMQ가 메시지를 컨슈머 중 하나에게만 라운드로빈으로 배분해
+    // 이벤트가 확률적으로 유실되는 문제가 있어 분리함)
+    @Value("${message.queue.company-hub-deleted}")
+    private String queueCompanyHubDeleted;
+    @Value("${message.queue.company-order-created}")
+    private String queueCompanyOrderCreated;
+
 
     @Value("${message.binding-key.notification.inventory-low}")
     private String keyNotificationInventoryLow;
@@ -44,7 +51,8 @@ public class QueueConfig {
     @Bean public Queue queueDelivery() { return new Queue(queueDelivery); }
     @Bean public Queue queueHub() { return new Queue(queueHub); }
     @Bean public Queue queueNotification() { return new Queue(queueNotification); }
-    @Bean public Queue queueCompany() { return new Queue(queueCompany); }
+    @Bean public Queue queueCompanyHubDeleted() { return new Queue(queueCompanyHubDeleted); }
+    @Bean public Queue queueCompanyOrderCreated() { return new Queue(queueCompanyOrderCreated); }
 
     // Hub -> Notification (재고 부족)
     @Bean
@@ -86,18 +94,18 @@ public class QueueConfig {
                 .with(keyHubRouteChanged);
     }
 
-    // Hub -> Company (허브 삭제)
+    // Hub -> Company (허브 삭제) : 전용 큐로 분리
     @Bean
     public Binding bindingCompanyHubDeleted() {
-        return BindingBuilder.bind(queueCompany())
+        return BindingBuilder.bind(queueCompanyHubDeleted())
                 .to(exchange())
                 .with(keyCompanyHubDeleted);
     }
 
-    // Order -> Company (주문 생성, 인기 상품 집계용)
+    // Order -> Company (주문 생성, 인기 상품 집계용) : 전용 큐로 분리
     @Bean
     public Binding bindingCompanyOrderCreated() {
-        return BindingBuilder.bind(queueCompany())
+        return BindingBuilder.bind(queueCompanyOrderCreated())
                 .to(exchange())
                 .with(keyCompanyOrderCreated);
     }
