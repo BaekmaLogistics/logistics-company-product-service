@@ -49,7 +49,7 @@ spring:
 
 #포트 번호 설정
 server:
-  port: ${SERVER_PORT}
+  port: ${SERVER_PORT:8085}
 
 hub:
   service:
