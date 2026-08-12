@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 import java.util.UUID;
 
-@FeignClient(name = "user-service", url = "${user.service.url}")
+@FeignClient(name = "user-service")
 public interface UserClient {
     @GetMapping("/internal/api/v1/users/{userId}")
     UserInfoResponse getUser(@PathVariable("userId") UUID userId);
