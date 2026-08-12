@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: logistics-postgres
+    environment:
+      POSTGRES_DB: logistics_db
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - logistics-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      #test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U root"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: logistics-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - logistics-redisdata:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: logistics-rabbitmq
+    ports:
+      - "5672:5672"      # 애플리케이션 접속용
+      - "15672:15672"    # 관리 웹 UI (http://localhost:15672)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - logistics-rabbitdata:/var/lib/rabbitmq
+
+volumes:
+  logistics-pgdata:
+  logistics-redisdata:
+  logistics-rabbitdata:

@@ -1,8 +1,10 @@
 spring:
   application:
-    name: logistics
+    name: company-product-service
   #  profiles:
-  #    active: dev
+  #  active: dev
+  config:
+    import: "optional:configserver:"
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${DB_USER}
@@ -16,6 +18,88 @@ spring:
         format_sql: true
         use_sql_comments: true
         impl.uuid_binary_compatibility: true
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
+
+  # Redis 설정, Redis 사용하지 않을 시 주석처리
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+  cache:
+    type: redis
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 5000
+            read-timeout: 3000
+            logger-level: basic
+            error-decoder: com.sparta.logistics.infrastructure.feign.decoder.FeignErrorDecoder
+
+#포트 번호 설정
+server:
+  port: ${SERVER_PORT}
+
+hub:
+  service:
+    url: ${HUB_SERVICE_URL}
+
+user:
+  service:
+    url: ${USER_SERVICE_URL}
+
+message:
+  exchange: baekma.exchange
+  queue:
+    delivery: delivery.queue
+    hub: hub.queue
+    notification: notification.queue
+    company-hub-deleted: company.hub-deleted.queue
+    company-order-created: company.order-created.queue
+  binding-key:
+    notification:
+      inventory-low: hub.inventory.low
+      order-created: order.created
+      order-canceled: order.canceled
+      order-completed: order.completed
+    hub:
+      route-changed: hub.route.changed
+    company:
+      hub-deleted: hub.deleted
+      order-created: order.created
+
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT}
+
+  endpoints:
+    web:
+      exposure:
+        include: health, circuitbreakers, circuitbreakerevents
+
+  endpoint:
+    health:
+      show-details: always
+
+  health:
+    circuitbreakers:
+      enabled: true
 
 springdoc:
   api-docs:
@@ -31,3 +115,39 @@ logging:
   level:
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind: trace
+    io.lettuce.core: DEBUG
+    org.springframework.data.redis: DEBUG
+
+resilience4j:
+  retry:
+    instances:
+      hubClient:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - com.sparta.logistics.infrastructure.feign.exception.FeignApiException
+          - feign.RetryableException
+      userClient: # 추가
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - com.sparta.logistics.infrastructure.feign.exception.FeignApiException
+          - feign.RetryableException
+  circuitbreaker:
+    instances:
+      hubClient:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      userClient:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
