@@ -1,84 +1,224 @@
-# Company-Product Service
+# 📦 Company-Product Service
 
-스파르타 물류 시스템(Sparta Logistics System)의 업체(Company) / 상품(Product) 도메인을 담당하는 마이크로서비스입니다.
-
----
-
-## 🛠 주요 기술 스택 & 포함된 설정
-
-- **Java**: 17
-- **Framework**: Spring Boot 3.5.14
-- **Database**: PostgreSQL (Spring Data JPA)
-- **Cache**: Redis (Cache-Aside, Sorted Set)
-- **Messaging**: RabbitMQ (Hub 삭제 이벤트 구독 예정)
-- **API Docs**: Springdoc OpenAPI (Swagger UI)
-- **Testing**: JUnit 5, Testcontainers
+Baekma Logistics의 업체(Company) 및 상품(Product) 도메인을 담당하는 Microservice입니다.
 
 ---
 
-## 📁 프로젝트 패키지 구조
+## 📌 담당 기능
 
-```text
-src/main/java/com/sparta/logistics
-├── application/       # 비즈니스 유스케이스 / 서비스 로직
-│   ├── company/       # 업체 도메인 서비스 로직
-│   └── product/       # 상품 도메인 서비스 로직
-├── domain/            # 도메인 엔티티, 리포지토리 인터페이스
-│   ├── company/
-│   └── product/
-├── infrastructure/    # DB, 외부 API 연동 구현체
-│   ├── config/        # RedisConfig, RabbitMQConfig 등 인프라 설정
-│   └── client/        # Hub 서비스 등 외부 서비스 호출용 FeignClient
-└── presentation/      # Controller, DTO 및 공통 예외/응답 처리
-    ├── company/
-    ├── product/
-    └── common/
-        ├── dto/       # 공통 응답 포맷 (GeneralResponse, ErrorResponse 등)
-        └── exception/ # 공통 예외 핸들러 (GlobalExceptionHandler, ApiException)
+- 업체(Company) CRUD + 검색 (QueryDSL 기반, 이름/주소 조건 검색)
+- 상품(Product) CRUD + 검색 (QueryDSL 기반, 상품명/업체명 조건 검색)
+- 역할(Role) 기반 권한 제어 — 업체·상품 생성/수정/삭제는 마스터 관리자 / 허브 관리자(담당 허브) / 업체 담당자(본인 업체)로 제한, 상품 조회는 허브 관리자의 경우 담당 허브 소속으로 스코프 제한
+- 업체·상품 등록/수정 시 Hub 서비스에 `hubId` 존재 여부 검증 (FeignClient + Resilience4j Retry/CircuitBreaker)
+- 권한 검사 시 User 서비스에 소속 정보 조회 (FeignClient + Resilience4j Retry/CircuitBreaker)
+- Hub 삭제 이벤트 구독 → 소속 업체 및 상품 일괄 비활성화 (RabbitMQ)
+- 주문 생성 이벤트 구독 → 인기 상품 집계 (RabbitMQ + Redis Sorted Set)
+- 업체/상품 목록 Redis 캐싱 (Cache-Aside), 인기 상품 리더보드 조회 API
+- 업체명 등록/수정 시 Redisson 분산락 기반 동시성 제어
+- 모든 엔티티 논리적 삭제(Soft Delete) 및 연관 데이터 캐스케이드 처리 (업체 삭제 → 소속 상품도 함께 비활성화)
+
+---
+
+## 🛠 Tech Stack
+
+| 구분 | 기술 |
+| --- | --- |
+| Language | Java 17 |
+| Framework | Spring Boot 3.5.14 |
+| Database | PostgreSQL (Spring Data JPA, QueryDSL) |
+| Cache | Redis (Cache-Aside, Sorted Set 리더보드) |
+| Messaging | RabbitMQ |
+| Communication | OpenFeign |
+| 동시성 제어 | Redisson (분산락) |
+| 장애 대응 | Resilience4j (Retry, CircuitBreaker) |
+| 서비스 디스커버리 | Spring Cloud Eureka Client |
+| 설정 관리 | Spring Cloud Config Client |
+| 분산 추적 | Micrometer Tracing + Zipkin |
+| API 문서화 | Springdoc OpenAPI (Swagger UI) |
+| 인증/인가 | Spring Security (Gateway 통과 후 헤더 기반 권한 검사) |
+
+---
+
+## ✨ 주요 구현 내용
+
+### 1. 업체/상품 CRUD + 검색
+
+QueryDSL을 이용한 동적 검색 조건(이름, 업체명 등)을 지원하며, 페이지 크기는 10/30/50건으로 화이트리스트 처리하고 그 외 값은 기본 10건으로 보정합니다.
+
+### 2. 역할 기반 세분화된 권한 제어
+
+- **업체(Company)**: 생성/수정/삭제는 마스터 관리자, 허브 관리자(담당 허브), 업체 담당자(본인 업체)로 제한되며, 조회/검색은 모든 역할에 제한 없이 허용됩니다.
+- **상품(Product)**: 생성/수정/삭제는 업체와 동일한 기준을 따르되, 조회/검색은 허브 관리자의 경우 담당 허브 소속 상품으로 스코프가 제한됩니다. (배송 담당자는 조회만 가능)
+
+### 3. RabbitMQ 기반 이벤트 처리
+
+Hub 서비스의 허브 삭제 이벤트와 Order 서비스의 주문 생성 이벤트를 각각 전용 큐로 구독하여, 서비스 간 직접 API 호출 없이도 데이터 정합성을 비동기로 유지합니다.
+
+### 4. Redis를 활용한 캐싱 및 리더보드
+
+업체/상품 목록은 Cache-Aside 전략으로 캐싱하고, 인기 상품은 Redis Sorted Set을 이용해 누적 주문 수량 기준 랭킹을 조회할 수 있도록 구현했습니다.
+
+### 5. Redisson 분산락을 이용한 동시성 제어
+
+동일한 이름의 업체가 동시에 여러 건 생성/수정되는 상황을 방지하기 위해 이름 기준 분산락을 적용했습니다.
+
+---
+
+## 💡 기술적 고민 및 해결
+
+### Hub 목록 전체 캐싱 → hubId 단위 개별 캐싱으로 설계 변경
+
+**문제**
+
+SA 설계 단계에서는 허브 목록이 17개로 고정돼 있다는 전제 하에, Hub 목록 전체를 하나의 캐시 키로 묶어서 캐싱하는 방식으로 계획했습니다. 그런데 실제로는 운영 중 새로운 허브가 추가될 수 있는데, 목록 전체를 하나의 키로 캐싱하면 신규 허브가 추가돼도 캐시가 갱신되기 전까지는 "허브가 존재하지 않는다"고 잘못 판단해 정상적인 요청이 거부되는 stale 데이터 문제가 발생할 수 있었습니다.
+
+**해결**
+
+캐싱 단위를 "허브 목록 전체"에서 "hubId 단위 개별 캐싱"으로 변경했습니다. `HubCacheService`를 신규로 만들어, 허브 존재 여부 검증 시 hubId 하나씩 캐시를 조회하고 없으면 그때 개별적으로 채워 넣도록 구조를 바꿨습니다. Hub 삭제 이벤트를 구독할 때도 목록 전체를 무효화하는 대신 `evictHub()`로 삭제된 hubId 하나만 정확히 무효화하도록 맞췄습니다.
+
+**결과**
+
+허브 개수가 고정이라는 전제가 깨져도(신규 허브 추가 시에도) stale 데이터 문제 없이 안전하게 동작하며, 캐시 무효화 범위도 "삭제된 허브 하나"로 최소화되어 다른 허브의 캐시가 불필요하게 날아가는 것도 방지했습니다.
+
+**배운 점**
+
+SA 단계에서 세운 전제("허브는 17개 고정")가 실제 운영 시나리오(신규 허브 추가 가능성)와 어긋날 수 있다는 걸 캐싱 전략을 설계하면서 다시 검토하게 됐고, 캐싱 단위를 정할 때는 데이터의 변경 가능성(고정 vs 가변)을 먼저 따져야 한다는 걸 배웠습니다.
+
+### Self-Invocation으로 인한 캐싱·재시도 무효화 문제
+
+**문제**
+
+`ProductQueryService`와 `HubValidator` 로직을 처음 작성할 때, 같은 클래스 안에서 `@Cacheable`/`@Retry`가 붙은 메서드를 `this.method()` 형태로 내부 호출하는 구조였습니다. Spring AOP는 프록시 기반으로 동작하는데, 같은 객체 내부에서 메서드를 호출하면 프록시를 거치지 않고 실제 메서드가 바로 실행되기 때문에, 어노테이션이 붙어 있어도 캐싱과 재시도 로직이 전혀 동작하지 않는 문제가 있었습니다. 컴파일도 되고 에러도 없어서, 캐시 히트/미스 로그를 직접 찍어보기 전까지는 원인을 알기 어려웠습니다.
+
+**해결**
+
+캐싱 로직(`CompanyCacheService`, `ProductCacheService`)과 재시도 대상 로직(`HubValidator`)을 각각 별도의 컴포넌트로 분리하여, 외부에서 프록시를 통해 호출되도록 구조를 변경했습니다.
+
+**결과**
+
+캐시 히트/미스, 재시도(3회) 후 CircuitBreaker OPEN 전이까지 실제 로그로 정상 동작을 검증할 수 있었고, "AOP가 적용되는 어노테이션은 프록시를 거치는 외부 호출에서만 동작한다"는 원칙을 팀 내 공유할 수 있었습니다.
+
+
+### RabbitMQ 큐 공유로 인한 이벤트 유실 문제
+
+**문제**
+
+Hub 삭제 이벤트(`hub.deleted`)와 주문 생성 이벤트(`order.created`)를 서로 다른 리스너(`HubDeletedEventListener`, `OrderCreatedEventListener`)가 처리하도록 구성했는데, 두 라우팅 키를 실수로 같은 큐 하나에 바인딩했습니다. RabbitMQ는 하나의 큐에 여러 컨슈머가 붙으면 메시지를 컨슈머 중 하나에게만 라운드로빈으로 분배하기 때문에, 리스너가 자신이 기대하는 이벤트 타입이 아니면 그냥 반환하는 구조상 메시지가 확률적으로(약 50%) 조용히 유실되는 문제가 있었습니다. ack까지 정상 처리되어 로그나 에러도 남지 않아 발견이 어려웠습니다.
+
+**해결**
+
+이벤트별로 전용 큐(`company.hub-deleted.queue`, `company.order-created.queue`)를 분리하고, 각 리스너가 자신의 전용 큐만 구독하도록 변경했습니다.
+
+**결과**
+
+컨슈머 간 메시지 분배 경쟁이 사라져 이벤트 유실 가능성이 구조적으로 제거되었고, 이후 큐가 추가되더라도 이벤트 타입별로 큐를 분리하는 컨벤션을 팀 내에 공유할 수 있었습니다.
+
+### 발제문 대비 Product 조회 권한 갭
+
+**문제**
+
+발제문을 재검토하는 과정에서, Company는 조회에 제한이 없지만 Product는 허브 관리자의 경우 조회·검색까지 담당 허브로 제한되어야 한다는 요구사항을 발견했습니다. 그러나 실제 구현에서는 Product 조회 API들에 역할 기반 스코프 필터링이 누락되어 있었습니다.
+
+**해결**
+
+`GetProductUseCase`, `GetProductListUseCase`, `GetPopularProductsUseCase`의 시그니처에 `userId`/`role`을 추가하고, User 서비스 조회 결과(`hubId`)를 기준으로 허브 관리자의 조회 범위를 필터링하도록 수정했습니다. 검색 조건 DTO에도 `hubId` 필드를 추가하여 QueryDSL 조회 조건에 반영했습니다.
+
+**결과**
+
+발제문 요구사항와 실제 동작이 일치하게 되었고, Company와 Product의 권한 정책이 왜 다른지를 팀 내에서 명확히 정리할 수 있었습니다.
+
+---
+
+### 도메인 특성에 맞지 않는 기술 배제 — 이벤트 소싱 / Saga 패턴
+
+**고민**
+
+SA 설계 단계에서 발제문 "기대 역량" 섹션에 이벤트 소싱, Saga 패턴이 언급돼 있어, Company/Product 도메인에도 도입할지 검토했습니다.
+
+**판단**
+
+- **이벤트 소싱**: 상태를 직접 저장하는 대신 상태를 변화시킨 이벤트를 순서대로 저장·재생하는 패턴으로, Event Store와 재생 로직까지 필요합니다. Company/Product는 단순 CRUD 위주 도메인이라 감사 로그(변경 이력 추적) 정도로 충분한 요구를 이벤트 소싱까지 가는 건 과도하다고 판단했습니다.
+- **Saga 패턴**: 여러 서비스에 걸친 연쇄 트랜잭션을 로컬 트랜잭션 + 보상 트랜잭션으로 처리하는 패턴입니다. Company/Product는 등록·수정·삭제가 단일 서비스 내부에서 완결되고, 여러 서비스에 걸친 트랜잭션 체인 자체가 없어 적용 대상이 아니라고 판단했습니다. (발제문상 Saga는 주문 생성 → 재고 차감 → 배송 생성처럼 여러 서비스가 얽히는 Order/Delivery 도메인에 해당하는 요구사항이었습니다.)
+
+**결과**
+
+두 패턴 모두 배제하고, 대신 도메인 특성(단일 서비스 내 완결)에 맞는 분산 락과 변경 이력 감사 로그로 방향을 잡았습니다. "문서에 언급됐다"는 이유만으로 기술을 끌어오지 않고, 도메인 구조와 실제 필요성을 먼저 검증하는 기준을 세울 수 있었습니다.
+
+### 자체 이벤트 발행 도입 여부 검토 — 배제
+
+**고민**
+
+Company/Product는 Hub 삭제·주문 생성 이벤트를 구독만 하고 있어, 다른 서비스에서 참조할 만한 변경사항(예: 업체/상품 생성·수정·삭제)이 생길 때 본인 서비스도 이벤트를 발행해보는 게 어떨지 검토했습니다.
+
+**판단**
+
+Company/Product의 변경 이벤트를 실제로 구독해서 쓸 다른 서비스(도메인)가 현재 없는 상태에서, 발행자 역할만 추가하는 건 소비자 없는 이벤트를 만드는 셈이 되어 오버엔지니어링이라고 판단했습니다. 이벤트 기반 통신은 "발행할 데이터가 있어서"가 아니라 "그 데이터를 실제로 필요로 하는 구독자가 있을 때" 도입하는 것이 맞다고 정리했습니다.
+
+**결과**
+
+자체 이벤트 발행은 도입하지 않고, 대신 실제로 소비자가 있는 두 흐름(Hub 삭제 이벤트 구독, 주문 생성 이벤트 구독)에 집중했습니다. 이후 발행/구독 흐름을 실습해보고 싶다는 학습 목적이 별도로 생겼을 때는, 캐시 무효화를 자체 이벤트로 처리하는 방식(같은 서비스 안에서 발행자+구독자 역할을 모두 맡는 구조)을 대안으로 검토했습니다 — 이 경우엔 "관심사 분리"라는 명확한 학습 목적이 있어 오버엔지니어링 판단 기준이 달라진다고 봤습니다.
+
+### 캐싱 로직 공통화 여부 검토 — 개별 구현 유지
+
+**고민**
+
+Company와 Product의 캐싱 로직(`CompanyCacheService`, `ProductCacheService`)이 "조건 없는 기본 목록 조회를 캐싱한다"는 동일한 패턴을 가지고 있어, `CacheManager`를 직접 다루는 제네릭 헬퍼(`CacheAsideHelper`)로 공통화할지 검토했습니다.
+
+**판단**
+
+`@Cacheable` 어노테이션은 캐시 이름(`value`)이 컴파일 타임 상수여야 해서 완전한 제네릭화가 불가능하고, `CacheManager`를 직접 다루는 방식으로 가면 가능하지만 직렬화·Evict 처리를 전부 수동으로 관리해야 해 디버깅 포인트가 늘어납니다. 도메인이 Company/Product 2개뿐인 시점에서는 중복 비용보다 추상화 비용이 더 크다고 판단해, 각각 개별 클래스로 유지하기로 했습니다.
+
+**결과**
+
+Spring이 권장하는 표준 방식(`@Cacheable`/`@CacheEvict`)을 그대로 유지해 코드리뷰에서도 익숙하게 읽히는 구조를 지켰고, "추상화는 중복이 실제로 부담되는 시점에 하는 것"이라는 기준을 세울 수 있었습니다.
+
+---
+
+## ⚠️ 알려진 제약사항 / 향후 개선 과제
+
+시간 제약상 인지한 상태로 우선순위에서 미뤄둔 항목입니다.
+
+### RabbitMQ 리스너에 DLQ(Dead Letter Queue) 미구성
+
+**현재 상태**
+
+`HubDeletedEventListener`, `OrderCreatedEventListener` 모두 처리 중 예외가 발생하면 메시지가 재큐잉되거나 유실될 수 있는 구조입니다. 처리 실패 메시지를 별도로 격리해 나중에 재처리하거나 원인을 추적할 수 있는 DLQ가 구성돼 있지 않습니다.
+
+**왜 지금은 안 했는지**
+
+이벤트 유실 문제(큐 공유로 인한 라운드로빈 분배)를 먼저 해결하는 것이 우선순위가 높았고, DLQ까지 구성하려면 Exchange/Queue 설정과 재처리 로직을 추가로 설계해야 해 제출 기한 내 완성도를 우선했습니다.
+
+**개선 방향**
+
+각 큐에 `x-dead-letter-exchange` 설정을 추가하고, 처리 실패 메시지를 별도 DLQ(`company.hub-deleted.dlq` 등)로 라우팅한 뒤 모니터링/수동 재처리 흐름을 마련합니다.
+
+### Feign 호출이 트랜잭션 범위 안에서 실행됨
+
+**현재 상태**
+
+`HubValidator`, `AuthorizationChecker`를 통한 Hub/User 서비스 호출이 `@Transactional` 메서드 내부에서 이루어지는 경로가 있어, 외부 서비스 응답을 기다리는 동안 DB 커넥션을 점유하는 구간이 존재합니다.
+
+**왜 지금은 안 했는지**
+
+CircuitBreaker + Retry로 장애 상황에서의 복원력은 우선 확보했지만, 트랜잭션 경계와 외부 호출을 완전히 분리하려면 서비스 계층을 다시 나누는 리팩터링이 필요해 시간상 CircuitBreaker/Retry 적용을 우선했습니다.
+
+**개선 방향**
+
+외부 서비스 호출(Feign)과 DB 저장 로직을 트랜잭션 레벨에서 분리하고, 필요하다면 검증 결과만 먼저 확보한 뒤 별도 트랜잭션으로 저장하는 구조로 리팩터링합니다.
+
+---
+## 🚀 실행 방법
+
+```bash
+./gradlew bootRun
 ```
 
----
-
-## 🌐 담당 도메인
-
-### Company (업체)
-- CRUD + 검색(QueryDSL), 권한별 접근 제어(마스터/허브관리자/업체담당자)
-- 업체 등록/수정 시 Hub 서비스에 `hubId` 존재 여부 검증 (FeignClient + Resilience4j Retry)
-- 업체 목록 Redis 캐싱 (Cache-Aside)
-- Hub 삭제 이벤트 구독 → 소속 업체 비활성화 + 캐시 무효화 (RabbitMQ)
-- 업체 등록 시 분산락(Redisson) 기반 동시성 제어
-
-### Product (상품)
-- CRUD + 검색(QueryDSL), 권한별 접근 제어
-- 상품 등록 시 Company 존재 여부 검증 (같은 서비스 내 로컬 조회)
-- 상품 목록 Redis 캐싱 (Cache-Aside)
-- 허브별 출고 빈도 TOP N 집계 (Redis Sorted Set, Order 생성 이벤트 구독 예정)
-- 상품 대량등록 (CSV 업로드, Bulk Insert)
+필요한 환경 변수 및 외부 인프라 설정은 프로젝트 공통 README를 참고해주세요.
 
 ---
 
-## ⚙️ 로컬 실행 환경 설정
+## 🔗 Project
 
-### `application.yml` 필수 환경변수
+전체 프로젝트의 아키텍처, ERD, 서비스 구성 및 팀원 역할은 Organization README에서 확인할 수 있습니다.
 
-| 변수 | 설명 | 기본값 |
-| --- | --- | --- |
-| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | PostgreSQL 접속 정보 | - |
-| `REDIS_HOST` / `REDIS_PORT` | Redis 접속 정보 | `localhost` / `6379` |
-| `RABBITMQ_HOST` / `RABBITMQ_PORT` | RabbitMQ 접속 정보 | - |
-
-
-### Swagger API 문서
-
-애플리케이션 실행 후 접속 URL:
-
-- **Swagger UI**: `http://localhost:8080/api/api-docs`
-- **OpenAPI Spec**: `http://localhost:8080/api/api-spec`
-
----
-
-## 📌 서비스 경계 관련 참고
-
-Company와 Product는 상품이 업체 없이 존재할 수 없고 조회 시 업체 정보가 함께 필요한 결합도를 고려하여
-하나의 서비스로 통합 운영합니다. 서비스 간 통신이 필요한 부분(Hub 존재 검증, Hub 삭제 이벤트 구독 등)은
-FeignClient / RabbitMQ를 통해 처리합니다.
+👉 [Baekma Logistics](Organization README URL)
