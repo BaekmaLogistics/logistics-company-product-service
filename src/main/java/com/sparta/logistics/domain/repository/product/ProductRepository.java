@@ -12,4 +12,5 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     List<Product> findAllByCompanyIdAndDeletedAtIsNull(UUID companyId);
     // 여러 companyId를 한 번에 조회 (N+1 방지)
     List<Product> findAllByCompanyIdInAndDeletedAtIsNull(List<UUID> companyIds);
+    List<Product> findAllByIdInAndDeletedAtIsNull(List<UUID> ids);
 }

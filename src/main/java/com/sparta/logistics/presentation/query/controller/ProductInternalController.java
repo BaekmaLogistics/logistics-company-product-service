@@ -5,6 +5,7 @@ import com.sparta.logistics.application.query.dto.product.ProductDetailResponseD
 import com.sparta.logistics.application.query.usecase.product.GetPopularProductsUseCase;
 import com.sparta.logistics.application.query.usecase.product.GetProductUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
+import com.sparta.logistics.domain.model.UserRole;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,8 +25,7 @@ public class ProductInternalController {
     public ResponseEntity<GeneralResponse<ProductDetailResponseDto>> getProduct(
             @PathVariable UUID productId) {
 
-        ProductDetailResponseDto response = getProductUseCase.get(productId);
+        ProductDetailResponseDto response = getProductUseCase.get(productId, null, UserRole.MASTER);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.PRODUCT_FOUND, response);
     }
-
 }
