@@ -98,7 +98,6 @@ SA 단계에서 세운 전제("허브는 17개 고정")가 실제 운영 시나�
 
 캐시 히트/미스, 재시도(3회) 후 CircuitBreaker OPEN 전이까지 실제 로그로 정상 동작을 검증할 수 있었고, "AOP가 적용되는 어노테이션은 프록시를 거치는 외부 호출에서만 동작한다"는 원칙을 배울 수 있었습니다.
 
-
 ### RabbitMQ 큐 공유로 인한 이벤트 유실 문제
 
 **문제**
@@ -172,25 +171,39 @@ Company와 Product의 캐싱 로직(`CompanyCacheService`, `ProductCacheService`
 
 Spring이 권장하는 표준 방식(`@Cacheable`/`@CacheEvict`)을 그대로 유지해 코드리뷰에서도 익숙하게 읽히는 구조를 지켰고, "추상화는 중복이 실제로 부담되는 시점에 하는 것"이라는 기준을 세울 수 있었습니다.
 
+### RabbitMQ 리스너에 DLQ(Dead Letter Queue) 구성
+
+**문제**
+
+`HubDeletedEventListener`, `OrderCreatedEventListener` 모두 처리 중 예외가 발생하면 메시지가 재큐잉되거나 유실될 수 있는 구조였습니다. 처리 실패 메시지를 별도로 격리해 나중에 재처리하거나 원인을 추적할 수 있는 장치가 없었습니다.
+
+**해결**
+
+`company.hub-deleted.queue`, `company.order-created.queue`에 `x-dead-letter-exchange`/`x-dead-letter-routing-key` 인자를 추가하고, 전용 DLX(`company.dlx`)와 DLQ(`company.hub-deleted.dlq`, `company.order-created.dlq`)를 구성했습니다. `spring.rabbitmq.listener.simple.retry` 설정으로 3회 재시도 후에도 실패하면 재큐잉 대신 DLQ로 라우팅되도록 했습니다.
+
+**결과**
+
+처리 실패 메시지가 무한 재큐잉되거나 조용히 유실되지 않고 별도로 격리되어, 실패 원인 추적과 수동 재처리가 가능해졌습니다.
+
+### FeignClient URL 직접 주입 방식의 취약점
+
+**문제**
+
+`HubClient`, `UserClient`가 `@FeignClient(url = "${hub.service.url}")` 방식으로 서비스 URL을 환경변수로 직접 주입받고 있었습니다. 배포 환경에 해당 환경변수(`HUB_SERVICE_URL` 등)가 누락되면, 치환되지 않은 문자열이 그대로 URI 파싱 로직에 넘어가 `URISyntaxException`으로 서버 구동 자체가 실패하는 문제가 실제 배포 환경에서 발생했습니다.
+
+**해결**
+
+`HubClient`, `UserClient`를 URL 직접 주입 방식에서 Eureka 기반 서비스 디스커버리 방식(`@FeignClient(name = "hub-service")`)으로 전환했습니다.
+
+**결과**
+
+배포 시마다 서비스 URL을 환경변수로 수동 주입해야 했던 운영 부담이 사라졌고, 환경변수 누락으로 인한 구동 실패 가능성도 구조적으로 제거되었습니다.
+
 ---
 
 ## ⚠️ 알려진 제약사항 / 향후 개선 과제
 
 시간 제약상 인지한 상태로 우선순위에서 미뤄둔 항목입니다.
-
-### RabbitMQ 리스너에 DLQ(Dead Letter Queue) 미구성
-
-**현재 상태**
-
-`HubDeletedEventListener`, `OrderCreatedEventListener` 모두 처리 중 예외가 발생하면 메시지가 재큐잉되거나 유실될 수 있는 구조입니다. 처리 실패 메시지를 별도로 격리해 나중에 재처리하거나 원인을 추적할 수 있는 DLQ가 구성돼 있지 않습니다.
-
-**왜 지금은 안 했는지**
-
-이벤트 유실 문제(큐 공유로 인한 라운드로빈 분배)를 먼저 해결하는 것이 우선순위가 높았고, DLQ까지 구성하려면 Exchange/Queue 설정과 재처리 로직을 추가로 설계해야 해 제출 기한 내 완성도를 우선했습니다.
-
-**개선 방향**
-
-각 큐에 `x-dead-letter-exchange` 설정을 추가하고, 처리 실패 메시지를 별도 DLQ(`company.hub-deleted.dlq` 등)로 라우팅한 뒤 모니터링/수동 재처리 흐름을 마련합니다.
 
 ### Feign 호출이 트랜잭션 범위 안에서 실행됨
 
