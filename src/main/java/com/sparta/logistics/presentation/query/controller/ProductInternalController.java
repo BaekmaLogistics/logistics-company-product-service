@@ -8,6 +8,7 @@ import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.domain.model.UserRole;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ public class ProductInternalController {
 
     private final GetProductUseCase getProductUseCase;
 
+    @SecurityRequirements
     @GetMapping("/{productId}")
     @Operation(summary = "상품 단건 조회 (내부용)", description = "서비스 간 호출 전용 엔드포인트로, 인증 헤더 없이 MASTER 권한으로 조회합니다.")
     public ResponseEntity<GeneralResponse<ProductDetailResponseDto>> getProduct(

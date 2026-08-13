@@ -5,6 +5,7 @@ import com.sparta.logistics.application.query.usecase.company.GetCompanyUseCase;
 import com.sparta.logistics.common.code.GeneralResponseCode;
 import com.sparta.logistics.presentation.common.dto.response.GeneralResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,7 @@ public class CompanyInternalController {
 
     private final GetCompanyUseCase getCompanyUseCase;
 
+    @SecurityRequirements
     @Operation(summary = "업체 단건 조회 (내부용)", description = "서비스 간 호출 전용 엔드포인트로, 인증 헤더 없이 조회합니다.")
     @GetMapping("/{companyId}")
     public ResponseEntity<GeneralResponse<CompanyDetailResponseDto>> getCompany(
